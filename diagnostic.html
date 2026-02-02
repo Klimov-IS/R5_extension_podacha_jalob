@@ -429,27 +429,30 @@
       display: block;
     }
 
+    .complaint-item {
+      border-top: 1px solid #f3f4f6;
+    }
+
+    .complaint-item:first-child {
+      border-top: none;
+    }
+
     .complaint-row {
       display: flex;
       align-items: center;
       padding: 12px 16px;
-      border-top: 1px solid #f3f4f6;
       gap: 16px;
-    }
-
-    .complaint-row:first-child {
-      border-top: none;
     }
 
     .complaint-rating {
       font-size: 14px;
-      min-width: 80px;
+      min-width: 70px;
     }
 
     .complaint-date {
       font-size: 13px;
       color: #6b7280;
-      min-width: 140px;
+      min-width: 90px;
     }
 
     .complaint-category {
@@ -459,6 +462,24 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+    }
+
+    .complaint-review-id {
+      font-size: 11px;
+      color: #9ca3af;
+      font-family: monospace;
+    }
+
+    .complaint-text {
+      padding: 8px 16px 12px 16px;
+      font-size: 13px;
+      color: #4b5563;
+      background: #f9fafb;
+      border-radius: 6px;
+      margin: 0 12px 12px 12px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
   </style>
 </head>

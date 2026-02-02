@@ -340,12 +340,18 @@ function showPreview(complaints) {
       const date = c.reviewDate ? new Date(c.reviewDate).toLocaleDateString('ru-RU') : 'N/A';
       const rating = c.rating || 0;
       const category = c.complaintData?.reasonName || c.reasonName || 'Не указана';
+      const text = c.complaintData?.complaintText || c.complaintText || '';
+      const reviewId = c.reviewId || c.id || '—';
 
       html += `
-        <div class="complaint-row">
-          <span class="complaint-rating">${'⭐'.repeat(rating) || '—'}</span>
-          <span class="complaint-date">${date}</span>
-          <span class="complaint-category">${category}</span>
+        <div class="complaint-item">
+          <div class="complaint-row">
+            <span class="complaint-rating">${'⭐'.repeat(rating) || '—'}</span>
+            <span class="complaint-date">${date}</span>
+            <span class="complaint-category">${category}</span>
+            <span class="complaint-review-id">ID: ${reviewId}</span>
+          </div>
+          ${text ? `<div class="complaint-text">${escapeHtml(text)}</div>` : ''}
         </div>
       `;
     });
@@ -370,6 +376,14 @@ document.addEventListener('click', (e) => {
     item.classList.toggle('open');
   }
 });
+
+// Экранирование HTML
+function escapeHtml(text) {
+  if (!text) return '';
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
 
 function resetUI() {
   storeSelect.disabled = false;
