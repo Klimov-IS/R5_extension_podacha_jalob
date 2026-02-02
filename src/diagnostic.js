@@ -1,8 +1,8 @@
 /**
- * Diagnostic Tool - Режим тестирования подачи жалоб
+ * Diagnostic Tool - Подача жалоб v3.0
  *
- * @version 2.1.0 - Добавлен preview жалоб перед запуском
- * @since 01.02.2026
+ * @version 3.0.0 - Minimal UI redesign
+ * @since 02.02.2026
  */
 
 'use strict';
@@ -18,17 +18,20 @@ const BACKEND_TOKEN = 'wbrm_0ab7137430d4fb62948db3a7d9b4b997';
 // DOM ЭЛЕМЕНТЫ
 // ========================================================================
 
-const resultsDiv = document.getElementById('test-results');
 const storeSelect = document.getElementById('store-select');
-const storeError = document.getElementById('store-error');
-const btnStartTest = document.getElementById('btn-start-test');
-const previewDiv = document.getElementById('complaints-preview');
-const previewStats = document.getElementById('preview-stats');
-const previewAccordion = document.getElementById('preview-accordion');
-const btnConfirmTest = document.getElementById('btn-confirm-test');
-const btnCancelPreview = document.getElementById('btn-cancel-preview');
+const btnGetComplaints = document.getElementById('btn-get-complaints');
+const btnSubmit = document.getElementById('btn-submit');
+const complaintsInfo = document.getElementById('complaints-info');
+const complaintsCountEl = document.getElementById('complaints-count');
+const progressSection = document.getElementById('progress-section');
+const progressBar = document.getElementById('progress-bar');
+const progressText = document.getElementById('progress-text');
+const errorMessage = document.getElementById('error-message');
+const errorText = document.getElementById('error-text');
+const resultsCard = document.getElementById('results-card');
+const resultsBody = document.getElementById('results-body');
 
-// Сохраняем загруженные жалобы для использования после подтверждения
+// Состояние
 let loadedComplaints = [];
 let currentStoreId = null;
 
@@ -37,7 +40,7 @@ let currentStoreId = null;
 // ========================================================================
 
 document.addEventListener('DOMContentLoaded', async () => {
-  console.log('[Diagnostic] Страница загружена');
+  console.log('[Diagnostic] Страница загружена v3.0.0');
   await loadStores();
 });
 
@@ -45,9 +48,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 // ЗАГРУЗКА МАГАЗИНОВ
 // ========================================================================
 
-/**
- * Загрузка списка магазинов с Backend API
- */
 async function loadStores() {
   console.log('[Diagnostic] Загрузка магазинов...');
 
@@ -66,10 +66,10 @@ async function loadStores() {
     }
 
     const stores = await response.json();
-    console.log(`[Diagnostic] Получено магазинов: ${stores.length}`, stores);
+    console.log(`[Diagnostic] Получено магазинов: ${stores.length}`);
 
     // Заполняем дропдаун
-    storeSelect.innerHTML = '<option value="">Выберите магазин</option>';
+    storeSelect.innerHTML = '<option value="">-- Выберите магазин --</option>';
 
     stores.forEach(store => {
       const option = document.createElement('option');
@@ -89,7 +89,7 @@ async function loadStores() {
 
   } catch (error) {
     console.error('[Diagnostic] Ошибка загрузки магазинов:', error);
-    storeError.textContent = `Ошибка загрузки: ${error.message}`;
+    showError(`Ошибка загрузки магазинов: ${error.message}`);
     storeSelect.innerHTML = '<option value="">Ошибка загрузки</option>';
   }
 }
@@ -100,28 +100,32 @@ async function loadStores() {
 
 storeSelect.addEventListener('change', () => {
   const hasSelection = storeSelect.value !== '';
-  btnStartTest.disabled = !hasSelection;
+  btnGetComplaints.disabled = !hasSelection;
 
+  // Сбрасываем состояние при смене магазина
   if (hasSelection) {
+    hideError();
+    hideResults();
+    complaintsInfo.classList.add('hidden');
+    btnSubmit.disabled = true;
+    loadedComplaints = [];
+
     const selectedOption = storeSelect.options[storeSelect.selectedIndex];
     console.log(`[Diagnostic] Выбран магазин: ${selectedOption.textContent} (${storeSelect.value})`);
   }
 });
 
 // ========================================================================
-// ЗАПУСК ТЕСТА
+// ПОЛУЧЕНИЕ ЖАЛОБ
 // ========================================================================
 
-btnStartTest.addEventListener('click', runTest);
+btnGetComplaints.addEventListener('click', getComplaints);
 
-/**
- * Запуск теста подачи жалоб - ШАГ 1: Загрузка и показ превью
- */
-async function runTest() {
+async function getComplaints() {
   const storeId = storeSelect.value;
 
   if (!storeId) {
-    alert('Выберите магазин!');
+    showError('Выберите магазин!');
     return;
   }
 
@@ -129,19 +133,19 @@ async function runTest() {
 
   // Блокируем UI
   storeSelect.disabled = true;
-  btnStartTest.disabled = true;
-  btnStartTest.textContent = 'Загрузка жалоб...';
-  resultsDiv.innerHTML = '';
+  btnGetComplaints.disabled = true;
+  btnGetComplaints.textContent = '⏳ Загрузка...';
+  hideError();
+  hideResults();
 
   try {
-    // 1. Получить жалобы от API
     console.log(`[Diagnostic] Получение жалоб для магазина ${storeId}...`);
 
     const apiResponse = await chrome.runtime.sendMessage({
       type: 'getComplaints',
       storeId: storeId,
       skip: 0,
-      take: 300 // Получаем до 300 жалоб
+      take: 300
     });
 
     if (!apiResponse || apiResponse.error) {
@@ -152,150 +156,62 @@ async function runTest() {
     console.log(`[Diagnostic] Получено ${loadedComplaints.length} жалоб`);
 
     if (loadedComplaints.length === 0) {
-      throw new Error('Нет жалоб для обработки.\n\nУбедитесь что в системе есть жалобы со статусом "draft".');
+      throw new Error('Нет жалоб для обработки. Убедитесь что в системе есть жалобы со статусом "draft".');
     }
 
-    // 2. Показать превью
-    showPreview(loadedComplaints);
+    // Показываем счётчик
+    complaintsCountEl.textContent = loadedComplaints.length;
+    complaintsInfo.classList.remove('hidden');
+    btnSubmit.disabled = false;
+
+    console.log('[Diagnostic] Жалобы загружены, готово к подаче');
 
   } catch (error) {
     console.error('[Diagnostic] Ошибка:', error);
-    displayError(error.message);
-    resetUI();
+    showError(error.message);
+  } finally {
+    storeSelect.disabled = false;
+    btnGetComplaints.disabled = false;
+    btnGetComplaints.textContent = '📥 Получить жалобы';
   }
 }
 
-/**
- * Показать превью жалоб в аккордеоне
- */
-function showPreview(complaints) {
-  console.log('[Diagnostic] Показываем превью...');
+// ========================================================================
+// ПОДАЧА ЖАЛОБ
+// ========================================================================
 
-  // Группируем по артикулам
-  const byArticle = {};
-  complaints.forEach(c => {
-    const articleId = c.productId || c.nmId || 'unknown';
-    if (!byArticle[articleId]) {
-      byArticle[articleId] = [];
-    }
-    byArticle[articleId].push(c);
-  });
+btnSubmit.addEventListener('click', submitComplaints);
 
-  // Статистика
-  previewStats.innerHTML = `
-    <div class="review-card" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
-      <h3>Загружено жалоб</h3>
-      <div class="review-card-content">
-        <div class="review-card-row">
-          <span class="review-card-label">Всего жалоб:</span>
-          <span class="review-card-value">${complaints.length}</span>
-        </div>
-        <div class="review-card-row">
-          <span class="review-card-label">Уникальных артикулов:</span>
-          <span class="review-card-value">${Object.keys(byArticle).length}</span>
-        </div>
-      </div>
-    </div>
-  `;
-
-  // Аккордеон
-  let html = '';
-  for (const [articleId, articleComplaints] of Object.entries(byArticle)) {
-    html += `
-      <div class="accordion-item">
-        <div class="accordion-header">
-          <span>Артикул: ${articleId} (${articleComplaints.length} жалоб)</span>
-          <span class="accordion-arrow">▼</span>
-        </div>
-        <div class="accordion-content">
-    `;
-
-    articleComplaints.forEach((c, idx) => {
-      const date = c.reviewDate ? new Date(c.reviewDate).toLocaleString('ru-RU') : 'N/A';
-      const rating = c.rating || 0;
-      const category = c.complaintData?.reasonName || c.reasonName || 'N/A';
-      const text = c.complaintData?.complaintText || c.complaintText || '';
-
-      html += `
-        <div class="complaint-card">
-          <div class="complaint-card-row">
-            <span class="complaint-card-label">Рейтинг:</span>
-            <span class="complaint-card-value">${'⭐'.repeat(rating) || 'N/A'}</span>
-          </div>
-          <div class="complaint-card-row">
-            <span class="complaint-card-label">Дата отзыва:</span>
-            <span class="complaint-card-value">${date}</span>
-          </div>
-          <div class="complaint-card-row">
-            <span class="complaint-card-label">Категория:</span>
-            <span class="complaint-card-value">${category}</span>
-          </div>
-          <div class="complaint-card-row">
-            <span class="complaint-card-label">Текст жалобы:</span>
-          </div>
-          <div class="complaint-text">${escapeHtml(text) || '(пусто)'}</div>
-        </div>
-      `;
-    });
-
-    html += `
-        </div>
-      </div>
-    `;
+async function submitComplaints() {
+  if (loadedComplaints.length === 0) {
+    showError('Сначала получите жалобы');
+    return;
   }
 
-  previewAccordion.innerHTML = html;
+  // Подтверждение
+  const storeName = storeSelect.options[storeSelect.selectedIndex].textContent;
+  const confirmed = confirm(
+    `ВНИМАНИЕ! РЕАЛЬНАЯ ПОДАЧА ЖАЛОБ!\n\n` +
+    `Магазин: ${storeName}\n` +
+    `Жалоб к подаче: ${loadedComplaints.length}\n\n` +
+    `Перед ПЕРВОЙ жалобой вы увидите заполненную форму для проверки.\n\n` +
+    `Продолжить?`
+  );
 
-  // Показываем превью, скрываем кнопку "Начать тест"
-  previewDiv.classList.remove('hidden');
-  btnStartTest.style.display = 'none';
-
-  console.log('[Diagnostic] Превью показано');
-}
-
-/**
- * Переключение аккордеона - используем делегирование событий
- */
-document.addEventListener('click', (e) => {
-  const header = e.target.closest('.accordion-header');
-  if (header) {
-    const item = header.parentElement;
-    item.classList.toggle('open');
+  if (!confirmed) {
+    console.log('[Diagnostic] Отменено пользователем');
+    return;
   }
-});
 
-/**
- * Экранирование HTML для безопасного отображения текста
- */
-function escapeHtml(text) {
-  if (!text) return '';
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
+  console.log('[Diagnostic] Запуск подачи жалоб...');
 
-/**
- * Сброс UI в исходное состояние
- */
-function resetUI() {
-  storeSelect.disabled = false;
-  btnStartTest.disabled = false;
-  btnStartTest.textContent = 'Начать тест';
-  btnStartTest.style.display = 'block';
-  previewDiv.classList.add('hidden');
-}
-
-/**
- * Запуск теста - ШАГ 2: Реальная подача после подтверждения
- */
-async function executeTest() {
-  console.log('[Diagnostic] Запуск реального теста...');
-
-  // Скрываем превью
-  previewDiv.classList.add('hidden');
-
-  // Показываем загрузку
-  showLoading();
+  // Блокируем UI
+  storeSelect.disabled = true;
+  btnGetComplaints.disabled = true;
+  btnSubmit.disabled = true;
+  btnSubmit.textContent = '⏳ Подача...';
+  hideError();
+  showProgress('Поиск вкладки WB...');
 
   try {
     // 1. Найти WB вкладку
@@ -312,9 +228,9 @@ async function executeTest() {
     }
 
     console.log(`[Diagnostic] WB вкладка найдена: ${wbTab.id}`);
+    updateProgress(10, 'Проверка content script...');
 
     // 2. Проверить content script
-    console.log('[Diagnostic] Проверка content script...');
     try {
       await chrome.tabs.sendMessage(wbTab.id, { type: 'ping' });
     } catch (error) {
@@ -322,8 +238,9 @@ async function executeTest() {
     }
 
     console.log('[Diagnostic] Content script готов');
+    updateProgress(20, 'Отправка жалоб на обработку...');
 
-    // 3. Запустить тест
+    // 3. Запустить подачу
     console.log(`[Diagnostic] Отправляем ${loadedComplaints.length} жалоб на обработку...`);
 
     const response = await chrome.tabs.sendMessage(wbTab.id, {
@@ -333,195 +250,155 @@ async function executeTest() {
     });
 
     if (!response.success) {
-      throw new Error(response.error || 'Тест не удался');
+      throw new Error(response.error || 'Подача не удалась');
     }
 
-    console.log('[Diagnostic] Тест завершен');
+    console.log('[Diagnostic] Подача завершена');
     console.log('[Diagnostic] Отчет:', response.report);
 
     // 4. Показать результаты
+    hideProgress();
     displayResults(response.report);
 
   } catch (error) {
     console.error('[Diagnostic] Ошибка:', error);
-    displayError(error.message);
+    hideProgress();
+    showError(error.message);
   } finally {
     resetUI();
   }
 }
 
 // ========================================================================
-// ОБРАБОТЧИКИ КНОПОК ПРЕВЬЮ
+// UI HELPERS
 // ========================================================================
 
-btnConfirmTest.addEventListener('click', async () => {
-  console.log('[Diagnostic] Подтверждение теста...');
+function showError(message) {
+  errorText.textContent = message;
+  errorMessage.classList.add('active');
+}
 
-  // Подтверждение перед реальной подачей
-  const storeName = storeSelect.options[storeSelect.selectedIndex].textContent;
-  const confirmed = confirm(
-    `ВНИМАНИЕ! РЕАЛЬНАЯ ПОДАЧА ЖАЛОБ!\n\n` +
-    `Магазин: ${storeName}\n` +
-    `Жалоб к подаче: ${loadedComplaints.length}\n\n` +
-    `Перед ПЕРВОЙ жалобой вы увидите заполненную форму и сможете проверить её.\n\n` +
-    `Продолжить?`
-  );
+function hideError() {
+  errorMessage.classList.remove('active');
+}
 
-  if (!confirmed) {
-    console.log('[Diagnostic] Отменено пользователем');
-    return;
-  }
+function showProgress(text) {
+  progressSection.classList.add('active');
+  progressBar.style.width = '0%';
+  progressText.textContent = text;
+}
 
-  await executeTest();
-});
+function updateProgress(percent, text) {
+  progressBar.style.width = `${percent}%`;
+  if (text) progressText.textContent = text;
+}
 
-btnCancelPreview.addEventListener('click', () => {
-  console.log('[Diagnostic] Отмена превью');
-  resetUI();
-  loadedComplaints = [];
-  currentStoreId = null;
-});
+function hideProgress() {
+  progressSection.classList.remove('active');
+}
+
+function hideResults() {
+  resultsCard.classList.remove('active');
+}
+
+function resetUI() {
+  storeSelect.disabled = false;
+  btnGetComplaints.disabled = false;
+  btnGetComplaints.textContent = '📥 Получить жалобы';
+  btnSubmit.disabled = loadedComplaints.length === 0;
+  btnSubmit.textContent = '▶️ Подать жалобы';
+}
 
 // ========================================================================
 // ОТОБРАЖЕНИЕ РЕЗУЛЬТАТОВ
 // ========================================================================
 
-/**
- * Показать загрузку
- */
-function showLoading() {
-  resultsDiv.innerHTML = `
-    <div class="loading">
-      Выполняется тест подачи жалоб<br>
-      <small style="color: #999;">(получение жалоб -> поиск -> проверка статусов -> подача)</small><br>
-      <small style="color: #ff512f; margin-top: 10px; display: block;">Перед первой жалобой будет запрос подтверждения!</small>
-    </div>
-  `;
-}
-
-/**
- * Показать ошибку
- */
-function displayError(message) {
-  resultsDiv.innerHTML = `
-    <div class="error">
-      <div class="error-title">Ошибка</div>
-      <p>${message.replace(/\n/g, '<br>')}</p>
-    </div>
-  `;
-}
-
-/**
- * Показать результаты теста
- */
 function displayResults(report) {
-  let html = '';
+  resultsCard.classList.add('active');
 
-  // Overall status
-  const statusClass = report.overallStatus.includes('SUCCESS')
-    ? 'success'
-    : report.overallStatus.includes('CANCELLED')
-    ? 'partial'
-    : 'failed';
-
-  html += `
-    <div class="overall-status ${statusClass}">
-      ${report.overallStatus}
-    </div>
-  `;
-
-  // Основная статистика
-  html += `
-    <div class="review-card" style="background: linear-gradient(135deg, #ff512f 0%, #dd2476 100%);">
-      <h3>Результаты теста</h3>
-      <div class="review-card-content">
-        <div class="review-card-row">
-          <span class="review-card-label">Жалоб получено от API:</span>
-          <span class="review-card-value">${report.complaintsReceived || 0}</span>
-        </div>
-        <div class="review-card-row">
-          <span class="review-card-label">Уникальных артикулов:</span>
-          <span class="review-card-value">${report.uniqueArticles || 0}</span>
-        </div>
-        <div class="review-card-row">
-          <span class="review-card-label">Отзывов найдено на WB:</span>
-          <span class="review-card-value">${report.reviewsFound || 0}</span>
-        </div>
-        <div class="review-card-row">
-          <span class="review-card-label">Можно подать жалобу:</span>
-          <span class="review-card-value">${report.canSubmitComplaint || 0}</span>
-        </div>
-        <div class="review-card-row">
-          <span class="review-card-label" style="font-weight: bold; color: #FFD700;">УСПЕШНО ПОДАНО:</span>
-          <span class="review-card-value" style="font-weight: bold; color: #FFD700;">${report.submitted || 0}</span>
-        </div>
-        <div class="review-card-row">
-          <span class="review-card-label">Пропущено (уже обработаны):</span>
-          <span class="review-card-value">${report.alreadyProcessed || 0}</span>
-        </div>
-        <div class="review-card-row">
-          <span class="review-card-label">Ошибки при подаче:</span>
-          <span class="review-card-value">${report.errors || 0}</span>
-        </div>
-      </div>
-    </div>
-  `;
-
-  // Отменено пользователем
-  if (report.cancelled) {
-    html += `
-      <div class="check failed">
-        <div class="check-title">
-          <span class="check-icon">⏹</span>
-          <span>Тест отменен пользователем</span>
-        </div>
-        <div class="check-details">
-          Пользователь отменил подтверждение первой жалобы.
-        </div>
-      </div>
-    `;
-  }
-
-  // Статусы найденных отзывов
-  if (report.statusStats && Object.keys(report.statusStats).length > 0) {
-    html += `
-      <div class="review-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-        <h3>Статусы отзывов</h3>
-        <div class="review-card-content">
-    `;
-
-    const sortedStatuses = Object.entries(report.statusStats).sort((a, b) => b[1] - a[1]);
-    for (const [status, count] of sortedStatuses) {
-      html += `
-        <div class="review-card-row">
-          <span class="review-card-label">${status}:</span>
-          <span class="review-card-value">${count}</span>
-        </div>
-      `;
+  const rows = [
+    {
+      label: 'Жалоб получено из API',
+      value: report.complaintsReceived || 0,
+      status: 'info',
+      statusText: 'Загружено'
+    },
+    {
+      label: 'Уникальных артикулов',
+      value: report.uniqueArticles || 0,
+      status: 'info',
+      statusText: 'Обработано'
+    },
+    {
+      label: 'Отзывов найдено на WB',
+      value: report.reviewsFound || 0,
+      status: 'info',
+      statusText: 'Спарсено'
+    },
+    {
+      label: 'Совпадений (жалоба ↔ отзыв)',
+      value: report.canSubmitComplaint || 0,
+      status: report.canSubmitComplaint > 0 ? 'success' : 'warning',
+      statusText: report.canSubmitComplaint > 0 ? 'Найдено' : 'Не найдено'
+    },
+    {
+      label: 'Жалоб подано успешно',
+      value: report.submitted || 0,
+      status: report.submitted > 0 ? 'success' : 'warning',
+      statusText: report.submitted > 0 ? 'Успешно' : 'Нет'
+    },
+    {
+      label: 'Пропущено (уже обработаны)',
+      value: report.alreadyProcessed || 0,
+      status: 'info',
+      statusText: 'Пропущено'
+    },
+    {
+      label: 'Ошибки при подаче',
+      value: report.errors || 0,
+      status: report.errors > 0 ? 'error' : 'success',
+      statusText: report.errors > 0 ? 'Ошибка' : 'Нет ошибок'
     }
+  ];
+
+  let html = '';
+  rows.forEach(row => {
+    const badgeClass = `badge-${row.status}`;
+    const dotClass = row.status === 'success' ? 'green' :
+                     row.status === 'error' ? 'red' :
+                     row.status === 'warning' ? 'yellow' : 'blue';
 
     html += `
-        </div>
-      </div>
+      <tr>
+        <td>${row.label}</td>
+        <td><strong>${row.value}</strong></td>
+        <td>
+          <span class="badge ${badgeClass}">
+            <span class="status-dot ${dotClass}"></span>
+            ${row.statusText}
+          </span>
+        </td>
+      </tr>
     `;
-  }
+  });
 
-  // JSON dump
+  // Итоговый статус
+  const overallStatus = report.overallStatus || 'COMPLETED';
+  const isSuccess = overallStatus.includes('SUCCESS');
+  const isCancelled = overallStatus.includes('CANCELLED');
+
   html += `
-    <details class="json-dump">
-      <summary>Полный отчет (JSON)</summary>
-      <pre>${JSON.stringify(report, null, 2)}</pre>
-    </details>
+    <tr style="background: ${isSuccess ? '#d1fae5' : isCancelled ? '#fef3c7' : '#fee2e2'};">
+      <td><strong>Итог</strong></td>
+      <td colspan="2">
+        <strong style="color: ${isSuccess ? '#059669' : isCancelled ? '#d97706' : '#dc2626'};">
+          ${overallStatus}
+        </strong>
+      </td>
+    </tr>
   `;
 
-  // Timestamp
-  html += `
-    <p style="text-align: center; margin-top: 20px; color: #999; font-size: 12px;">
-      Тест выполнен: ${new Date(report.timestamp).toLocaleString('ru-RU')}
-    </p>
-  `;
-
-  resultsDiv.innerHTML = html;
+  resultsBody.innerHTML = html;
 }
 
-console.log('[Diagnostic] Модуль загружен (v2.1.0 - preview mode)');
+console.log('[Diagnostic] Модуль загружен (v3.0.0 - minimal UI)');
