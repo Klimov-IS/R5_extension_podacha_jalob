@@ -71,18 +71,17 @@ async function loadStores() {
     // Заполняем дропдаун
     storeSelect.innerHTML = '<option value="">-- Выберите магазин --</option>';
 
-    stores.forEach(store => {
+    // Показываем только активные магазины
+    const activeStores = stores.filter(store => store.isActive);
+
+    activeStores.forEach(store => {
       const option = document.createElement('option');
       option.value = store.id;
       option.textContent = store.name;
-
-      if (!store.isActive) {
-        option.disabled = true;
-        option.textContent += ' (неактивен)';
-      }
-
       storeSelect.appendChild(option);
     });
+
+    console.log(`[Diagnostic] Активных магазинов: ${activeStores.length} из ${stores.length}`);
 
     storeSelect.disabled = false;
     console.log('[Diagnostic] Магазины загружены');
