@@ -344,6 +344,122 @@
     .hidden {
       display: none !important;
     }
+
+    /* Accordion / Preview */
+    .preview-card {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      margin-bottom: 24px;
+      display: none;
+    }
+
+    .preview-card.active {
+      display: block;
+    }
+
+    .preview-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .accordion-item {
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      margin-bottom: 8px;
+      overflow: hidden;
+    }
+
+    .accordion-header {
+      background: #f9fafb;
+      padding: 14px 16px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      user-select: none;
+      transition: background 0.2s;
+    }
+
+    .accordion-header:hover {
+      background: #f3f4f6;
+    }
+
+    .accordion-header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .accordion-article {
+      font-weight: 600;
+      color: #1a1a2e;
+    }
+
+    .accordion-count {
+      font-size: 12px;
+      color: #6b7280;
+      background: #e5e7eb;
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+
+    .accordion-arrow {
+      color: #9ca3af;
+      transition: transform 0.2s;
+      font-size: 12px;
+    }
+
+    .accordion-item.open .accordion-arrow {
+      transform: rotate(180deg);
+    }
+
+    .accordion-content {
+      display: none;
+      padding: 0;
+      background: white;
+    }
+
+    .accordion-item.open .accordion-content {
+      display: block;
+    }
+
+    .complaint-row {
+      display: flex;
+      align-items: center;
+      padding: 12px 16px;
+      border-top: 1px solid #f3f4f6;
+      gap: 16px;
+    }
+
+    .complaint-row:first-child {
+      border-top: none;
+    }
+
+    .complaint-rating {
+      font-size: 14px;
+      min-width: 80px;
+    }
+
+    .complaint-date {
+      font-size: 13px;
+      color: #6b7280;
+      min-width: 140px;
+    }
+
+    .complaint-category {
+      font-size: 13px;
+      color: #8b5cf6;
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
   </style>
 </head>
 <body>
@@ -393,6 +509,16 @@
       <div id="error-message" class="error-message">
         <strong>Ошибка</strong>
         <span id="error-text"></span>
+      </div>
+    </div>
+
+    <!-- Preview Accordion -->
+    <div id="preview-card" class="preview-card">
+      <div class="preview-title">
+        📋 Превью жалоб
+      </div>
+      <div id="preview-accordion">
+        <!-- Accordion items will be inserted here -->
       </div>
     </div>
 

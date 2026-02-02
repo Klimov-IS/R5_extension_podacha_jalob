@@ -30,6 +30,8 @@ const errorMessage = document.getElementById('error-message');
 const errorText = document.getElementById('error-text');
 const resultsCard = document.getElementById('results-card');
 const resultsBody = document.getElementById('results-body');
+const previewCard = document.getElementById('preview-card');
+const previewAccordion = document.getElementById('preview-accordion');
 
 // Состояние
 let loadedComplaints = [];
@@ -105,6 +107,7 @@ storeSelect.addEventListener('change', () => {
   if (hasSelection) {
     hideError();
     hideResults();
+    hidePreview();
     complaintsInfo.classList.add('hidden');
     btnSubmit.disabled = true;
     loadedComplaints = [];
@@ -162,6 +165,9 @@ async function getComplaints() {
     complaintsCountEl.textContent = loadedComplaints.length;
     complaintsInfo.classList.remove('hidden');
     btnSubmit.disabled = false;
+
+    // Показываем превью
+    showPreview(loadedComplaints);
 
     console.log('[Diagnostic] Жалобы загружены, готово к подаче');
 
@@ -299,6 +305,71 @@ function hideProgress() {
 function hideResults() {
   resultsCard.classList.remove('active');
 }
+
+function hidePreview() {
+  previewCard.classList.remove('active');
+}
+
+function showPreview(complaints) {
+  // Группируем по артикулам
+  const byArticle = {};
+  complaints.forEach(c => {
+    const articleId = c.productId || c.nmId || 'unknown';
+    if (!byArticle[articleId]) {
+      byArticle[articleId] = [];
+    }
+    byArticle[articleId].push(c);
+  });
+
+  // Генерируем HTML аккордеона
+  let html = '';
+  for (const [articleId, articleComplaints] of Object.entries(byArticle)) {
+    html += `
+      <div class="accordion-item">
+        <div class="accordion-header">
+          <div class="accordion-header-left">
+            <span class="accordion-article">Артикул: ${articleId}</span>
+            <span class="accordion-count">${articleComplaints.length} жалоб</span>
+          </div>
+          <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-content">
+    `;
+
+    articleComplaints.forEach(c => {
+      const date = c.reviewDate ? new Date(c.reviewDate).toLocaleDateString('ru-RU') : 'N/A';
+      const rating = c.rating || 0;
+      const category = c.complaintData?.reasonName || c.reasonName || 'Не указана';
+
+      html += `
+        <div class="complaint-row">
+          <span class="complaint-rating">${'⭐'.repeat(rating) || '—'}</span>
+          <span class="complaint-date">${date}</span>
+          <span class="complaint-category">${category}</span>
+        </div>
+      `;
+    });
+
+    html += `
+        </div>
+      </div>
+    `;
+  }
+
+  previewAccordion.innerHTML = html;
+  previewCard.classList.add('active');
+
+  console.log(`[Diagnostic] Превью: ${Object.keys(byArticle).length} артикулов`);
+}
+
+// Обработчик клика по аккордеону (делегирование)
+document.addEventListener('click', (e) => {
+  const header = e.target.closest('.accordion-header');
+  if (header) {
+    const item = header.parentElement;
+    item.classList.toggle('open');
+  }
+});
 
 function resetUI() {
   storeSelect.disabled = false;
