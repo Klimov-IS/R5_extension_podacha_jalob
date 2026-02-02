@@ -1,0 +1,452 @@
+body {
+  font-family: "Segoe UI", sans-serif;
+  margin: 0;
+  background: #f9fafb;
+  color: #222;
+  width: 450px;
+  min-height: 400px;
+}
+
+.modal {
+  padding: 16px;
+}
+
+.modal-content {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Заголовок с рейтингом */
+.header-rating {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.header-rating h2 {
+  margin: 0;
+  text-align: left;
+}
+
+.rating-badge {
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 2px 4px rgba(251, 191, 36, 0.3);
+  white-space: nowrap;
+}
+
+h3 {
+  margin-top: 0;
+}
+
+.main-btn,
+.submit-btn,
+.secondary-btn {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.main-btn {
+  background: #4f46e5;
+  color: white;
+}
+
+.main-btn:hover {
+  background: #4338ca;
+}
+
+.submit-btn {
+  background: #16a34a;
+  color: white;
+}
+
+.submit-btn:hover {
+  background: #15803d;
+}
+
+.secondary-btn {
+  background: #e5e7eb;
+  color: #111;
+}
+
+.secondary-btn:hover {
+  background: #d1d5db;
+}
+
+.stars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0;
+}
+
+textarea {
+  width: 100%;
+  height: 80px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  padding: 8px;
+  resize: none;
+}
+
+.hidden {
+  display: none;
+}
+
+/* Переключатель режимов */
+.mode-switcher {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  background: #f3f4f6;
+  padding: 4px;
+  border-radius: 8px;
+}
+
+.mode-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #6b7280;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.mode-btn:hover {
+  background: #e5e7eb;
+}
+
+.mode-btn.active {
+  background: #4f46e5;
+  color: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Форма парсинга */
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.form-group input[type="number"] {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.filters {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Прогресс парсинга */
+#parsing-progress {
+  margin-top: 16px;
+  padding: 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.progress-info {
+  margin-bottom: 12px;
+}
+
+.progress-info p {
+  margin: 4px 0;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.progress-bar {
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4f46e5, #6366f1);
+  transition: width 0.3s ease;
+  width: 0%;
+}
+
+/* Результаты парсинга */
+#parsing-results {
+  margin-top: 16px;
+  padding: 16px;
+  background: #f0fdf4;
+  border-radius: 8px;
+  border: 1px solid #bbf7d0;
+}
+
+.results-stats p {
+  margin: 6px 0;
+  font-size: 14px;
+  color: #374151;
+}
+
+.rating-distribution {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #d1fae5;
+}
+
+#rating-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.buttons button {
+  flex: 1;
+  margin-top: 0;
+}
+
+select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+
+/* Режим проверки жалоб */
+#articles-input {
+  width: 100%;
+  min-height: 100px;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: "Segoe UI", sans-serif;
+  resize: vertical;
+}
+
+.date-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.date-range input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  text-align: center;
+}
+
+.date-range span {
+  color: #6b7280;
+  font-weight: 500;
+}
+
+/* Прогресс проверки */
+#verification-progress {
+  margin-top: 16px;
+  padding: 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+/* Результаты проверки */
+#verification-results {
+  margin-top: 16px;
+  padding: 16px;
+  background: #f0fdf4;
+  border-radius: 8px;
+  border: 1px solid #bbf7d0;
+}
+
+.article-stats {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #d1fae5;
+}
+
+#v-article-stats {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+#v-article-stats div {
+  padding: 4px 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+#v-article-stats div:last-child {
+  border-bottom: none;
+}
+
+/* Панель логов */
+.logs-panel {
+  margin-top: 12px;
+  padding: 8px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+}
+
+.logs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.logs-header strong {
+  font-size: 13px;
+  color: #374151;
+}
+
+.tiny-btn {
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  background: #e5e7eb;
+  color: #374151;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.tiny-btn:hover {
+  background: #d1d5db;
+}
+
+.logs-content {
+  max-height: 250px;
+  min-height: 150px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  font-family: "Consolas", "Monaco", "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #1f2937;
+  background: #ffffff;
+  padding: 8px;
+  border-radius: 4px;
+  word-break: break-word;
+}
+
+.log-entry {
+  padding: 4px 0;
+  margin-bottom: 2px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.log-entry:last-child {
+  border-bottom: none;
+}
+
+.log-entry.log-info {
+  color: #2563eb;
+}
+
+.log-entry.log-success {
+  color: #059669;
+  font-weight: 500;
+}
+
+.log-entry.log-warning {
+  color: #d97706;
+}
+
+.log-entry.log-error {
+  color: #dc2626;
+  font-weight: 500;
+}
+
+.log-timestamp {
+  color: #9ca3af;
+  margin-right: 6px;
+  font-size: 11px;
+}
+
+/* Кастомный скроллбар для панели логов */
+.logs-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.logs-content::-webkit-scrollbar-track {
+  background: #f3f4f6;
+  border-radius: 4px;
+}
+
+.logs-content::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 4px;
+}
+
+.logs-content::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* Страница в разработке */
+.under-development {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.dev-gif {
+  width: 200px;
+  height: auto;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.under-development h3 {
+  color: #f59e0b;
+  margin-bottom: 8px;
+}
+
+.under-development p {
+  color: #6b7280;
+  font-size: 14px;
+}

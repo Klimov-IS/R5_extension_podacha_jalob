@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Режим тестирования - Подача жалоб</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 20px;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+      overflow: hidden;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #ff512f 0%, #dd2476 100%);
+      color: white;
+      padding: 30px;
+      text-align: center;
+    }
+
+    .header h1 {
+      font-size: 28px;
+      margin-bottom: 10px;
+    }
+
+    .test-mode-badge {
+      display: inline-block;
+      background: rgba(255,255,255,0.2);
+      padding: 8px 20px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 600;
+      margin-top: 10px;
+    }
+
+    .content {
+      padding: 30px;
+    }
+
+    .instructions {
+      background: #f8f9fa;
+      border-left: 4px solid #ff512f;
+      padding: 20px;
+      margin-bottom: 30px;
+      border-radius: 8px;
+    }
+
+    .instructions h2 {
+      font-size: 18px;
+      margin-bottom: 15px;
+      color: #333;
+    }
+
+    .instructions ol {
+      margin-left: 20px;
+      line-height: 1.8;
+      color: #555;
+    }
+
+    .instructions code {
+      background: #e9ecef;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+    }
+
+    .store-selector {
+      background: #f8f9fa;
+      padding: 25px;
+      border-radius: 12px;
+      margin-bottom: 30px;
+    }
+
+    .store-selector label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 10px;
+      color: #333;
+      font-size: 16px;
+    }
+
+    .store-selector select {
+      width: 100%;
+      padding: 15px;
+      font-size: 16px;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      background: white;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+
+    .store-selector select:focus {
+      outline: none;
+      border-color: #ff512f;
+    }
+
+    .store-selector select:disabled {
+      background: #f0f0f0;
+      cursor: not-allowed;
+    }
+
+    .error-text {
+      color: #dc3545;
+      font-size: 14px;
+      margin-top: 10px;
+      display: block;
+    }
+
+    .action-section {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .btn-start-test {
+      background: linear-gradient(135deg, #ff512f 0%, #dd2476 100%);
+      color: white;
+      border: none;
+      padding: 18px 60px;
+      font-size: 20px;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 4px 15px rgba(255, 81, 47, 0.4);
+    }
+
+    .btn-start-test:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(255, 81, 47, 0.6);
+    }
+
+    .btn-start-test:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    .btn-start-test:disabled {
+      background: #6c757d;
+      cursor: not-allowed;
+      opacity: 0.6;
+      box-shadow: none;
+    }
+
+    .warning-text {
+      margin-top: 15px;
+      font-size: 13px;
+      color: #dc3545;
+      font-weight: 500;
+    }
+
+    .review-card {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+    }
+
+    .review-card h3 {
+      font-size: 16px;
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .review-card-content {
+      background: rgba(255,255,255,0.15);
+      border-radius: 8px;
+      padding: 15px;
+    }
+
+    .review-card-row {
+      display: flex;
+      justify-content: space-between;
+      margin: 8px 0;
+      font-size: 14px;
+    }
+
+    .review-card-label {
+      opacity: 0.8;
+    }
+
+    .review-card-value {
+      font-weight: 600;
+    }
+
+    .results {
+      margin-top: 30px;
+    }
+
+    .check {
+      margin: 12px 0;
+      padding: 15px;
+      border-radius: 8px;
+      border-left: 4px solid #ddd;
+      background: #f8f9fa;
+      transition: all 0.3s;
+    }
+
+    .check.success {
+      background: #d4edda;
+      border-left-color: #28a745;
+    }
+
+    .check.failed {
+      background: #f8d7da;
+      border-left-color: #dc3545;
+    }
+
+    .check-title {
+      font-weight: 600;
+      font-size: 16px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .check-icon {
+      font-size: 20px;
+    }
+
+    .check-details {
+      font-size: 13px;
+      color: #666;
+      margin-top: 5px;
+      line-height: 1.6;
+    }
+
+    .overall-status {
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      font-size: 18px;
+      font-weight: 600;
+      text-align: center;
+    }
+
+    .overall-status.success {
+      background: #d4edda;
+      color: #155724;
+      border: 2px solid #28a745;
+    }
+
+    .overall-status.failed {
+      background: #f8d7da;
+      color: #721c24;
+      border: 2px solid #dc3545;
+    }
+
+    .overall-status.partial {
+      background: #fff3cd;
+      color: #856404;
+      border: 2px solid #ffc107;
+    }
+
+    .json-dump {
+      background: #2d2d2d;
+      color: #f8f8f2;
+      padding: 15px;
+      border-radius: 8px;
+      overflow-x: auto;
+      margin-top: 20px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .json-dump summary {
+      cursor: pointer;
+      color: #fff;
+      font-weight: 600;
+      margin-bottom: 10px;
+      user-select: none;
+    }
+
+    .json-dump pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      font-size: 16px;
+      color: #ff512f;
+    }
+
+    .loading::after {
+      content: '...';
+      animation: dots 1.5s infinite;
+    }
+
+    @keyframes dots {
+      0%, 20% { content: '.'; }
+      40% { content: '..'; }
+      60%, 100% { content: '...'; }
+    }
+
+    .error {
+      background: #f8d7da;
+      border: 2px solid #dc3545;
+      color: #721c24;
+      padding: 20px;
+      border-radius: 8px;
+      margin-top: 20px;
+    }
+
+    .error-title {
+      font-weight: 600;
+      font-size: 18px;
+      margin-bottom: 10px;
+    }
+
+    /* Preview Section */
+    .hidden { display: none; }
+
+    #complaints-preview {
+      margin-top: 30px;
+    }
+
+    #complaints-preview h3 {
+      font-size: 20px;
+      margin-bottom: 20px;
+      color: #333;
+    }
+
+    .preview-actions {
+      margin-top: 20px;
+      text-align: center;
+    }
+
+    .accordion-item {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      overflow: hidden;
+    }
+
+    .accordion-header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 15px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      user-select: none;
+    }
+
+    .accordion-header:hover {
+      opacity: 0.9;
+    }
+
+    .accordion-arrow {
+      transition: transform 0.2s;
+    }
+
+    .accordion-item.open .accordion-arrow {
+      transform: rotate(180deg);
+    }
+
+    .accordion-content {
+      display: none;
+      padding: 15px;
+      background: #f8f9fa;
+    }
+
+    .accordion-item.open .accordion-content {
+      display: block;
+    }
+
+    .complaint-card {
+      background: white;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 10px;
+      border-left: 4px solid #ff512f;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .complaint-card-row {
+      display: flex;
+      margin-bottom: 8px;
+    }
+
+    .complaint-card-label {
+      font-weight: 600;
+      width: 120px;
+      color: #666;
+      flex-shrink: 0;
+    }
+
+    .complaint-card-value {
+      flex: 1;
+    }
+
+    .complaint-text {
+      background: #fff3cd;
+      padding: 10px;
+      border-radius: 4px;
+      font-size: 13px;
+      white-space: pre-wrap;
+      max-height: 100px;
+      overflow-y: auto;
+      margin-top: 5px;
+    }
+
+    .btn-cancel {
+      background: #6c757d;
+      color: white;
+      border: none;
+      padding: 15px 40px;
+      font-size: 16px;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-left: 15px;
+      transition: background 0.2s;
+    }
+
+    .btn-cancel:hover {
+      background: #5a6268;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Подача жалоб WB</h1>
+      <div class="test-mode-badge">РЕЖИМ ТЕСТИРОВАНИЯ</div>
+    </div>
+
+    <div class="content">
+      <div class="instructions">
+        <h2>Инструкция:</h2>
+        <ol>
+          <li>Откройте страницу <code>seller.wildberries.ru/feedbacks</code> в отдельной вкладке</li>
+          <li>Выберите магазин из списка ниже</li>
+          <li>Нажмите кнопку "Начать тест"</li>
+          <li>Перед первой жалобой вы увидите заполненную форму для проверки</li>
+          <li>После подтверждения остальные жалобы будут поданы автоматически</li>
+        </ol>
+      </div>
+
+      <div class="store-selector">
+        <label for="store-select">Выберите магазин:</label>
+        <select id="store-select" disabled>
+          <option value="">Загрузка магазинов...</option>
+        </select>
+        <span id="store-error" class="error-text"></span>
+      </div>
+
+      <div class="action-section">
+        <button id="btn-start-test" class="btn-start-test" disabled>
+          Начать тест
+        </button>
+        <p class="warning-text">
+          ВНИМАНИЕ: Тест будет РЕАЛЬНО подавать жалобы на WB!
+        </p>
+      </div>
+
+      <div id="test-results"></div>
+
+      <!-- Превью жалоб (скрыто по умолчанию) -->
+      <div id="complaints-preview" class="hidden">
+        <h3>Превью жалоб</h3>
+        <div id="preview-stats"></div>
+        <div id="preview-accordion"></div>
+        <div class="preview-actions">
+          <button id="btn-confirm-test" class="btn-start-test">
+            Подтвердить и запустить
+          </button>
+          <button id="btn-cancel-preview" class="btn-cancel">
+            Отмена
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="src/diagnostic.js"></script>
+</body>
+</html>

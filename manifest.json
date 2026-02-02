@@ -1,0 +1,50 @@
+{
+  "manifest_version": 3,
+  "name": "Р5 подача жалоб",
+  "version": "2.0.1",
+  "description": "Автоматизация подачи жалоб на отзывы Wildberries",
+  "permissions": ["activeTab", "scripting", "tabs", "storage"],
+  "host_permissions": [
+    "*://seller.wildberries.ru/*",
+    "http://158.160.217.236/*",
+    "https://wb-reputation-2.ru/*"
+  ],
+  "icons": {
+    "16": "src/icons/icon-16.png",
+    "48": "src/icons/icon-48.png",
+    "128": "src/icons/icon-128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://seller.wildberries.ru/*"],
+      "js": [
+        "src/utils/logger-content.js",
+        "src/contents/complaints/content.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["dist/content-main-world.bundle.js"],
+      "matches": ["*://seller.wildberries.ru/*"]
+    }
+  ],
+  "background": {
+    "service_worker": "src/background/index.js",
+    "type": "module"
+  },
+  "action": {
+    "default_icon": {
+      "16": "src/icons/icon-16.png",
+      "48": "src/icons/icon-48.png",
+      "128": "src/icons/icon-128.png"
+    },
+    "default_title": "Р5 подача жалоб",
+    "default_popup": "popup.html"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}

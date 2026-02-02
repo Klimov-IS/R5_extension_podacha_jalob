@@ -1,0 +1,32 @@
+{
+  "name": "wb-reports",
+  "version": "1.2.0",
+  "description": "Автоматизация работы с отзывами и жалобами на Wildberries",
+  "private": true,
+  "scripts": {
+    "build": "webpack --mode production",
+    "build:dev": "webpack --mode development --watch",
+    "lint": "eslint src/**/*.js",
+    "lint:fix": "eslint src/**/*.js --fix",
+    "format": "prettier --write \"src/**/*.{js,json,css,html}\"",
+    "format:check": "prettier --check \"src/**/*.{js,json,css,html}\""
+  },
+  "keywords": [
+    "wildberries",
+    "chrome-extension",
+    "automation"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "neo-async": "^2.6.2",
+    "prettier": "^3.2.5",
+    "terser-webpack-plugin": "^5.3.16",
+    "webpack": "^5.104.1",
+    "webpack-cli": "^6.0.1"
+  },
+  "dependencies": {
+    "mime-db": "^1.54.0"
+  }
+}
