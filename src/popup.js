@@ -1,85 +1,48 @@
 /**
- * Popup script - упрощённая версия
- * Только открытие страницы подачи жалоб
+ * Popup script - Diagnostic entry point
+ * Opens the diagnostic page for complaint submission workflow
  *
- * @version 2.0.0 - Simplified
+ * @version 3.0.0 - Single button (diagnostic only)
  */
 
 document.addEventListener("DOMContentLoaded", async () => {
-  const btnReview = document.getElementById("btn-review");
   const btnDiagnostic = document.getElementById("btn-diagnostic");
 
-  // === Открытие страницы подачи жалоб ===
-  btnReview.addEventListener("click", async () => {
-    try {
-      // Проверяем, открыта ли уже страница подачи жалоб
-      const allTabs = await chrome.tabs.query({});
-      const existingComplaintsTab = allTabs.find(tab =>
-        tab.url && tab.url.includes(chrome.runtime.getURL("complaints-page.html"))
-      );
-
-      if (existingComplaintsTab) {
-        // Если страница уже открыта - фокусируемся на ней
-        await chrome.tabs.update(existingComplaintsTab.id, { active: true });
-        await chrome.windows.update(existingComplaintsTab.windowId, { focused: true });
-        return;
-      }
-
-      // Получаем текущую активную вкладку для определения позиции
-      const [currentTab] = await chrome.tabs.query({
-        active: true,
-        currentWindow: true,
-      });
-
-      // Открываем страницу подачи жалоб в новой вкладке
-      await chrome.tabs.create({
-        url: chrome.runtime.getURL("complaints-page.html"),
-        index: currentTab.index + 1,
-        active: true,
-      });
-
-      console.log("✅ Страница подачи жалоб открыта");
-    } catch (error) {
-      console.error("Ошибка открытия страницы подачи жалоб:", error);
-      alert("❌ Ошибка: " + error.message);
-    }
-  });
-
-  // === Открытие диагностической страницы ===
+  // === Open diagnostic page ===
   btnDiagnostic.addEventListener("click", async () => {
     try {
-      // Проверяем, открыта ли уже страница диагностики
+      // Check if diagnostic page is already open
       const allTabs = await chrome.tabs.query({});
       const existingDiagnosticTab = allTabs.find(tab =>
         tab.url && tab.url.includes(chrome.runtime.getURL("diagnostic.html"))
       );
 
       if (existingDiagnosticTab) {
-        // Если страница уже открыта - фокусируемся на ней
+        // Focus on existing tab
         await chrome.tabs.update(existingDiagnosticTab.id, { active: true });
         await chrome.windows.update(existingDiagnosticTab.windowId, { focused: true });
         return;
       }
 
-      // Получаем текущую активную вкладку для определения позиции
+      // Get current tab position
       const [currentTab] = await chrome.tabs.query({
         active: true,
         currentWindow: true,
       });
 
-      // Открываем диагностическую страницу в новой вкладке
+      // Open diagnostic page in new tab
       await chrome.tabs.create({
         url: chrome.runtime.getURL("diagnostic.html"),
         index: currentTab.index + 1,
         active: true,
       });
 
-      console.log("✅ Диагностическая страница открыта");
+      console.log("[Popup] Diagnostic page opened");
     } catch (error) {
-      console.error("Ошибка открытия диагностической страницы:", error);
-      alert("❌ Ошибка: " + error.message);
+      console.error("[Popup] Error opening diagnostic page:", error);
+      alert("Error: " + error.message);
     }
   });
 
-  console.log('[Popup] ✅ Расширение готово');
+  console.log('[Popup] Extension ready');
 });
