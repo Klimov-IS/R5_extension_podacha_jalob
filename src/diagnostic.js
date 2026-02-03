@@ -14,6 +14,10 @@
 const BACKEND_ENDPOINT = 'http://158.160.217.236';
 const BACKEND_TOKEN = 'wbrm_0ab7137430d4fb62948db3a7d9b4b997';
 
+// Настройки многораундовой обработки
+const MAX_ROUNDS = 10;
+const COMPLAINTS_PER_ROUND = 300;
+
 // ========================================================================
 // DOM ЭЛЕМЕНТЫ
 // ========================================================================
@@ -133,6 +137,10 @@ async function getComplaints() {
 
   currentStoreId = storeId;
 
+  // Сохраняем выбранный магазин в storage для использования в API
+  await chrome.storage.local.set({ currentStoreId: storeId });
+  console.log(`[Diagnostic] Store ID сохранён в storage: ${storeId}`);
+
   // Блокируем UI
   storeSelect.disabled = true;
   btnGetComplaints.disabled = true;
@@ -198,7 +206,10 @@ async function submitComplaints() {
   const confirmed = confirm(
     `ВНИМАНИЕ! РЕАЛЬНАЯ ПОДАЧА ЖАЛОБ!\n\n` +
     `Магазин: ${storeName}\n` +
-    `Жалоб к подаче: ${loadedComplaints.length}\n\n` +
+    `Первая порция: ${loadedComplaints.length} жалоб\n` +
+    `Макс. раундов: ${MAX_ROUNDS}\n\n` +
+    `Система будет запрашивать жалобы порциями по ${COMPLAINTS_PER_ROUND},\n` +
+    `пока не останется 0 или не достигнут лимит раундов.\n\n` +
     `Перед ПЕРВОЙ жалобой вы увидите заполненную форму для проверки.\n\n` +
     `Продолжить?`
   );
@@ -208,7 +219,7 @@ async function submitComplaints() {
     return;
   }
 
-  console.log('[Diagnostic] Запуск подачи жалоб...');
+  console.log('[Diagnostic] Запуск многораундовой подачи жалоб...');
 
   // Блокируем UI
   storeSelect.disabled = true;
@@ -218,8 +229,22 @@ async function submitComplaints() {
   hideError();
   showProgress('Поиск вкладки WB...');
 
+  // Накопительная статистика за все раунды
+  const totalStats = {
+    rounds: 0,
+    complaintsReceived: 0,
+    reviewsFound: 0,
+    totalReviewsSynced: 0,
+    canSubmitComplaint: 0,
+    submitted: 0,
+    alreadyProcessed: 0,
+    errors: 0,
+    uniqueArticles: new Set(),
+    overallStatus: 'COMPLETED'
+  };
+
   try {
-    // 1. Найти WB вкладку
+    // 1. Найти WB вкладку (один раз перед циклом)
     console.log('[Diagnostic] Поиск WB вкладки...');
     const tabs = await chrome.tabs.query({});
     const wbTab = tabs.find(tab =>
@@ -233,9 +258,9 @@ async function submitComplaints() {
     }
 
     console.log(`[Diagnostic] WB вкладка найдена: ${wbTab.id}`);
-    updateProgress(10, 'Проверка content script...');
+    updateProgress(5, 'Проверка content script...');
 
-    // 2. Проверить content script
+    // 2. Проверить content script (один раз перед циклом)
     try {
       await chrome.tabs.sendMessage(wbTab.id, { type: 'ping' });
     } catch (error) {
@@ -243,27 +268,116 @@ async function submitComplaints() {
     }
 
     console.log('[Diagnostic] Content script готов');
-    updateProgress(20, 'Отправка жалоб на обработку...');
 
-    // 3. Запустить подачу
-    console.log(`[Diagnostic] Отправляем ${loadedComplaints.length} жалоб на обработку...`);
+    // ========================================================================
+    // МНОГОРАУНДОВЫЙ ЦИКЛ
+    // ========================================================================
+    let round = 1;
 
-    const response = await chrome.tabs.sendMessage(wbTab.id, {
-      type: 'test4Diagnostics',
-      complaints: loadedComplaints,
-      storeId: currentStoreId
-    });
+    while (round <= MAX_ROUNDS) {
+      console.log(`[Diagnostic] ========== РАУНД ${round}/${MAX_ROUNDS} ==========`);
+      updateProgress(10 + (round - 1) * 8, `Раунд ${round}/${MAX_ROUNDS}: Получение жалоб...`);
 
-    if (!response.success) {
-      throw new Error(response.error || 'Подача не удалась');
+      // 3. Запросить жалобы от API
+      const apiResponse = await chrome.runtime.sendMessage({
+        type: 'getComplaints',
+        storeId: currentStoreId,
+        skip: 0,
+        take: COMPLAINTS_PER_ROUND
+      });
+
+      if (!apiResponse || apiResponse.error) {
+        console.error('[Diagnostic] Ошибка API:', apiResponse?.error);
+        totalStats.overallStatus = 'ERROR: API failed';
+        break;
+      }
+
+      const complaints = apiResponse.data || [];
+      console.log(`[Diagnostic] Раунд ${round}: получено ${complaints.length} жалоб`);
+
+      // Условие выхода: 0 жалоб
+      if (complaints.length === 0) {
+        console.log('[Diagnostic] Все жалобы обработаны (API вернул 0)');
+        totalStats.overallStatus = 'SUCCESS: Все жалобы обработаны';
+        break;
+      }
+
+      updateProgress(15 + (round - 1) * 8, `Раунд ${round}/${MAX_ROUNDS}: Обработка ${complaints.length} жалоб...`);
+
+      // 4. Отправить на обработку в WB вкладку
+      const response = await chrome.tabs.sendMessage(wbTab.id, {
+        type: 'test4Diagnostics',
+        complaints: complaints,
+        storeId: currentStoreId
+      });
+
+      if (!response.success) {
+        console.error('[Diagnostic] Ошибка обработки:', response.error);
+        totalStats.overallStatus = `ERROR: ${response.error || 'Processing failed'}`;
+        break;
+      }
+
+      const roundReport = response.report;
+      console.log(`[Diagnostic] Раунд ${round} завершен:`, roundReport);
+
+      // 5. Накопить статистику
+      totalStats.rounds++;
+      totalStats.complaintsReceived += roundReport.complaintsReceived || 0;
+      totalStats.reviewsFound += roundReport.reviewsFound || 0;
+      totalStats.totalReviewsSynced += roundReport.totalReviewsSynced || 0;
+      totalStats.canSubmitComplaint += roundReport.canSubmitComplaint || 0;
+      totalStats.submitted += roundReport.submitted || 0;
+      totalStats.alreadyProcessed += roundReport.alreadyProcessed || 0;
+      totalStats.errors += roundReport.errors || 0;
+
+      // Собираем уникальные артикулы
+      if (roundReport.articles && Array.isArray(roundReport.articles)) {
+        roundReport.articles.forEach(a => totalStats.uniqueArticles.add(a));
+      }
+
+      // Если раунд был отменён
+      if (roundReport.cancelled) {
+        console.log('[Diagnostic] Раунд отменён пользователем');
+        totalStats.overallStatus = 'CANCELLED: Прервано пользователем';
+        break;
+      }
+
+      // 6. Следующий раунд
+      round++;
+
+      // Пауза между раундами (2 секунды)
+      if (round <= MAX_ROUNDS) {
+        updateProgress(18 + (round - 2) * 8, `Пауза перед раундом ${round}...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
     }
 
-    console.log('[Diagnostic] Подача завершена');
-    console.log('[Diagnostic] Отчет:', response.report);
+    // Проверка на достижение лимита раундов
+    if (round > MAX_ROUNDS && totalStats.overallStatus === 'COMPLETED') {
+      totalStats.overallStatus = `WARNING: Достигнут лимит ${MAX_ROUNDS} раундов`;
+      console.warn(`[Diagnostic] Достигнут лимит раундов: ${MAX_ROUNDS}`);
+    }
 
-    // 4. Показать результаты
+    console.log('[Diagnostic] ========== ИТОГИ ==========');
+    console.log(`[Diagnostic] Всего раундов: ${totalStats.rounds}`);
+    console.log(`[Diagnostic] Жалоб получено: ${totalStats.complaintsReceived}`);
+    console.log(`[Diagnostic] Подано успешно: ${totalStats.submitted}`);
+    console.log(`[Diagnostic] Статус: ${totalStats.overallStatus}`);
+
+    // 7. Показать итоговые результаты
     hideProgress();
-    displayResults(response.report);
+    displayResults({
+      rounds: totalStats.rounds,
+      complaintsReceived: totalStats.complaintsReceived,
+      reviewsFound: totalStats.reviewsFound,
+      totalReviewsSynced: totalStats.totalReviewsSynced,
+      canSubmitComplaint: totalStats.canSubmitComplaint,
+      submitted: totalStats.submitted,
+      alreadyProcessed: totalStats.alreadyProcessed,
+      errors: totalStats.errors,
+      uniqueArticles: totalStats.uniqueArticles.size,
+      overallStatus: totalStats.overallStatus
+    });
 
   } catch (error) {
     console.error('[Diagnostic] Ошибка:', error);
@@ -402,6 +516,12 @@ function displayResults(report) {
 
   const rows = [
     {
+      label: 'Раундов выполнено',
+      value: report.rounds || 1,
+      status: 'info',
+      statusText: `из ${MAX_ROUNDS} макс.`
+    },
+    {
       label: 'Жалоб получено из API',
       value: report.complaintsReceived || 0,
       status: 'info',
@@ -418,6 +538,12 @@ function displayResults(report) {
       value: report.reviewsFound || 0,
       status: 'info',
       statusText: 'Спарсено'
+    },
+    {
+      label: 'Отзывов синхронизировано в БД',
+      value: report.totalReviewsSynced || 0,
+      status: 'info',
+      statusText: 'Синхронизировано'
     },
     {
       label: 'Совпадений (жалоба ↔ отзыв)',
