@@ -1,10 +1,10 @@
 # R5 Подача жалоб
 
-**Версия:** 2.1.0
-**Дата:** 02 февраля 2026
+**Версия:** 2.2.0
+**Дата:** 03 февраля 2026
 **Chrome Extension** для автоматизации подачи жалоб на отзывы Wildberries
 
-[![Version](https://img.shields.io/badge/version-2.1.0-blue.svg)](https://github.com/Klimov-IS/R5_extension_podacha_jalob)
+[![Version](https://img.shields.io/badge/version-2.2.0-blue.svg)](https://github.com/Klimov-IS/R5_extension_podacha_jalob)
 [![Chrome](https://img.shields.io/badge/chrome-Manifest%20V3-green.svg)](https://www.google.com/chrome/)
 
 ---
@@ -15,10 +15,10 @@
 
 ### Основной функционал:
 - **Автоматическая подача жалоб** - заполнение и отправка форм без ручного вмешательства
+- **Многораундовая обработка** - до 10 раундов по 300 жалоб (до 3000 за сессию)
 - **Status Sync** - синхронизация статусов отзывов с Backend в реальном времени
 - **Интеграция с Backend API** - получение задач и отправка статистики
-- **Пакетная обработка** - до 300 жалоб за один запуск
-- **Детальная статистика** - отчёты по обработанным жалобам
+- **Детальная статистика** - отчёты по обработанным жалобам с накоплением по раундам
 
 ---
 
@@ -210,11 +210,12 @@ GET /api/extension/stores/{storeId}/complaints?skip=0&take=300
 Authorization: Bearer {token}
 ```
 
-#### Отметка жалобы как отправленной
+#### Отметка жалобы как отправленной (pending)
 ```http
 POST /api/extension/stores/{storeId}/reviews/{reviewId}/complaint/sent
 Authorization: Bearer {token}
 ```
+> Статус меняется на `pending` (на рассмотрении WB)
 
 #### Синхронизация статусов
 ```http
@@ -298,6 +299,13 @@ const HARDCODED_TOKEN = 'wbrm_0ab7137430d4fb62948db3a7d9b4b997';
 ---
 
 ## История версий
+
+### v2.2.0 (03.02.2026)
+- **Многораундовая обработка** - до 10 раундов по 300 жалоб (3000 за сессию)
+- **Исправлен API endpoint** - `/api/extension/stores/...` для отметки жалоб
+- **Статус pending** - жалобы сразу переходят в "на рассмотрении" (без промежуточного sent)
+- **Метрика totalReviewsSynced** - показывает общее количество синхронизированных отзывов
+- **Парсинг всех страниц** - временное решение для полного наполнения БД
 
 ### v2.1.0 (02.02.2026)
 - **Status Sync** - синхронизация статусов всех отзывов с Backend

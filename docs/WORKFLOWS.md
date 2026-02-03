@@ -280,9 +280,44 @@ User interface for testing and running batch complaint operations.
 
 **Entry Point:** `diagnostic.html`
 
-**UI Flow:** Select store → Load complaints → Preview → Confirm → Execute
+**UI Flow:** Select store → Load complaints → Preview → Confirm → **Multi-round Execute**
 
-### 3.2 Step-by-Step Sequence
+### 3.2 Multi-Round Processing (v2.2.0)
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    MULTI-ROUND WORKFLOW                                  │
+└─────────────────────────────────────────────────────────────────────────┘
+
+Constants:
+- MAX_ROUNDS = 10
+- COMPLAINTS_PER_ROUND = 300
+- Max total = 3000 complaints per session
+
+Flow:
+┌─────────────────────────────────────────────────────────────────────────┐
+│  ROUND 1                                                                 │
+│  ├── GET complaints (filter=draft, limit=300)                           │
+│  ├── Process on WB page                                                 │
+│  ├── Mark submitted as pending                                          │
+│  └── Accumulate stats                                                   │
+├─────────────────────────────────────────────────────────────────────────┤
+│  ROUND 2                                                                 │
+│  ├── GET complaints (filter=draft) → processed ones won't appear        │
+│  ├── Process remaining                                                  │
+│  └── Accumulate stats                                                   │
+├─────────────────────────────────────────────────────────────────────────┤
+│  ... (up to 10 rounds)                                                  │
+├─────────────────────────────────────────────────────────────────────────┤
+│  EXIT CONDITIONS:                                                        │
+│  ├── API returns 0 complaints → SUCCESS                                 │
+│  ├── Round 10 reached → WARNING                                         │
+│  ├── User cancelled → CANCELLED                                         │
+│  └── Error occurred → ERROR                                             │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### 3.3 Step-by-Step Sequence
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -294,15 +329,16 @@ User interface for testing and running batch complaint operations.
    ├── Load stores from Backend
    │   GET /api/extension/stores
    │
-   └── Populate store dropdown
+   └── Populate store dropdown (only active stores)
 
 2. STORE SELECTION
    │
    ├── User selects store from dropdown
+   ├── Save storeId to chrome.storage.local
    │
-   └── Enable "Start Test" button
+   └── Enable "Get Complaints" button
 
-3. START TEST (Step 1)
+3. LOAD COMPLAINTS (First batch)
    │
    ├── Load complaints from Backend
    │   GET /api/extension/stores/{storeId}/complaints?filter=draft&limit=300
@@ -316,35 +352,49 @@ User interface for testing and running batch complaint operations.
    ├── User reviews complaints in accordion
    ├── Can expand each article to see details
    │
-   └── Buttons: "Confirm" or "Cancel"
+   └── Button: "Submit" enabled
 
-5. CONFIRM (Step 2)
+5. CONFIRM
    │
-   ├── Show confirmation dialog with warning
+   ├── Show confirmation dialog:
+   │   - Store name
+   │   - First batch count (e.g., 300)
+   │   - Max rounds (10)
+   │   - Warning about real submission
    │
    └── If cancelled → Reset UI
 
-6. EXECUTE TEST
+6. MULTI-ROUND EXECUTE
    │
    ├── Find WB tab (seller.wildberries.ru/feedbacks)
    ├── Verify content script ready (ping)
    │
-   ├── Send test4Diagnostics message:
-   │   {
-   │     type: 'test4Diagnostics',
-   │     complaints: [...],
-   │     storeId: '...'
-   │   }
-   │
-   └── Wait for response with report
+   └── WHILE (round <= 10):
+       │
+       ├── GET /api/extension/stores/{storeId}/complaints?filter=draft&limit=300
+       │
+       ├── IF 0 complaints → EXIT with SUCCESS
+       │
+       ├── Send test4Diagnostics to WB tab
+       │
+       ├── Accumulate round stats to totalStats
+       │
+       ├── IF cancelled → EXIT with CANCELLED
+       │
+       ├── round++
+       │
+       └── Wait 2 seconds before next round
 
 7. DISPLAY RESULTS
    │
-   ├── Show overall status (SUCCESS/FAILED/CANCELLED)
-   ├── Show statistics (found, submitted, skipped, errors)
-   ├── Show status breakdown
+   ├── Show rounds completed (e.g., "3 из 10")
+   ├── Show cumulative statistics:
+   │   - Total complaints received
+   │   - Total reviews synced
+   │   - Total submitted
+   │   - Total errors
    │
-   └── Show JSON dump in expandable section
+   └── Show overall status (SUCCESS/WARNING/CANCELLED/ERROR)
 ```
 
 ### 3.3 Test Modes
@@ -454,12 +504,15 @@ if (result === "NEED_RELOAD") {
 
 ### 4.7 Safety Limits
 
-| Limit | Value | Configurable |
-|-------|-------|--------------|
-| Max complaints per run | 300 | Yes (diagnostic.js) |
-| Max pages per article | 10 | Yes (optimized-handler.js) |
-| Status sync batch size | 100 | Yes (status-sync-service.js) |
-| Sync timeout | 30s | Yes (optimized-handler.js) |
+| Limit | Value | Configurable | Location |
+|-------|-------|--------------|----------|
+| Max rounds per session | 10 | Yes | diagnostic.js:18 |
+| Complaints per round | 300 | Yes | diagnostic.js:19 |
+| Max complaints per session | 3000 | Calculated | 10 × 300 |
+| Max pages per article | 10 | Yes | optimized-handler.js |
+| Status sync batch size | 100 | Yes | status-sync-service.js |
+| Sync timeout | 30s | Yes | optimized-handler.js |
+| Pause between rounds | 2s | Yes | diagnostic.js |
 
 ---
 

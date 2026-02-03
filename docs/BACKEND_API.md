@@ -148,7 +148,7 @@ Content-Type: application/json
   "total": 150,
   "stats": {
     "draft": 150,
-    "sent": 45,
+    "pending": 45,
     "rejected": 10
   }
 }
@@ -174,7 +174,7 @@ Content-Type: application/json
 | text | string | Original review text |
 | authorName | string | Review author name |
 | complaintText | object | Parsed complaint data |
-| status | string | Current status: "draft", "sent", "rejected" |
+| status | string | Current status: "draft", "pending", "approved", "rejected", "reconsidered" |
 
 **complaintText Object:**
 
@@ -204,14 +204,17 @@ X-RateLimit-Reset: 1706450000
 
 ---
 
-### 2.3 Mark Complaint as Sent
+### 2.3 Mark Complaint as Sent (Pending)
 
-Mark a complaint as submitted to WB.
+Mark a complaint as submitted to WB. Status changes to `pending` (under review).
 
 **Endpoint:**
 ```
-POST /api/stores/{storeId}/reviews/{reviewId}/complaint/sent
+POST /api/extension/stores/{storeId}/reviews/{reviewId}/complaint/sent
 ```
+
+> **Note:** Updated 2026-02-03. Previously used `/api/stores/...` (without `/extension/`).
+> Status `sent` was removed - complaints go directly to `pending`.
 
 **Path Parameters:**
 
@@ -245,19 +248,18 @@ Content-Type: application/json
 ```json
 {
   "success": true,
-  "reviewId": "complaint_abc123",
-  "status": "sent",
-  "sentAt": "2026-01-28T12:00:00.000Z"
+  "review_id": "complaint_abc123",
+  "new_status": "pending",
+  "sent_at": "2026-01-28T12:00:00.000Z",
+  "message": "Complaint marked as pending (under review)"
 }
 ```
 
-**Response (Already Sent - 409):**
+**Response (Not in Draft - 400):**
 ```json
 {
-  "success": true,
-  "message": "Complaint already sent",
-  "duplicate": true,
-  "reviewId": "complaint_abc123"
+  "error": "Bad request",
+  "message": "Complaint is not in draft status (current: pending)"
 }
 ```
 
@@ -265,12 +267,12 @@ Content-Type: application/json
 
 | Code | Meaning |
 |------|---------|
-| 200 | Successfully marked as sent |
+| 200 | Successfully marked as pending |
+| 400 | Complaint not in draft status |
 | 401 | Invalid or expired token |
 | 404 | Review not found |
-| 409 | Already marked as sent (idempotent) |
 
-**Note:** The 409 response is treated as success for idempotency. Repeated calls with the same reviewId are safe.
+**Note:** Complaints can only transition from `draft` → `pending`. Subsequent calls return 400.
 
 **Usage:** `src/api/pilot-api.js:markComplaintAsSent()`
 
@@ -460,8 +462,8 @@ await sleep(500);
 2. Extension processes each complaint on WB page
    (DOM interaction, form submission)
 
-3. Extension marks complaint as sent
-   POST /api/stores/{storeId}/reviews/{reviewId}/complaint/sent
+3. Extension marks complaint as pending
+   POST /api/extension/stores/{storeId}/reviews/{reviewId}/complaint/sent
 
 4. Extension syncs statuses (background)
    POST /api/extension/review-statuses
@@ -537,13 +539,13 @@ curl -H "Authorization: Bearer wbrm_xxx" \
   "http://158.160.217.236/api/extension/stores/STORE_ID/complaints?limit=100&filter=draft"
 ```
 
-### Mark as Sent
+### Mark as Sent (Pending)
 ```bash
 curl -X POST \
   -H "Authorization: Bearer wbrm_xxx" \
   -H "Content-Type: application/json" \
   -d '{"sentAt":"2026-01-28T12:00:00.000Z"}' \
-  "http://158.160.217.236/api/stores/STORE_ID/reviews/REVIEW_ID/complaint/sent"
+  "http://158.160.217.236/api/extension/stores/STORE_ID/reviews/REVIEW_ID/complaint/sent"
 ```
 
 ### Sync Statuses

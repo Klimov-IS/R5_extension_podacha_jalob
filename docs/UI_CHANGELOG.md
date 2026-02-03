@@ -21,6 +21,39 @@ Each entry should include:
 
 ### February 2026
 
+#### 2026-02-03: Multi-Round Processing & API Fix (v2.2.0)
+
+**Change Type:** Feature + Bug fix
+
+**What Changed:**
+1. **API Endpoint Fix:**
+   - Old: `/api/stores/{storeId}/reviews/{reviewId}/complaint/sent`
+   - New: `/api/extension/stores/{storeId}/reviews/{reviewId}/complaint/sent`
+   - Status changed from `sent` → `pending`
+
+2. **Multi-Round Processing:**
+   - Added 10-round loop (up to 3000 complaints per session)
+   - Each round fetches fresh complaints (filter=draft)
+   - Processed complaints don't appear in next round
+   - Cumulative statistics across all rounds
+
+3. **New Metrics:**
+   - `totalReviewsSynced` - count of reviews synced to DB
+   - `rounds` - number of rounds completed
+   - Results show "X из 10 макс."
+
+**Files Updated:**
+- `src/api/pilot-api.js:192` - fixed endpoint URL
+- `src/diagnostic.js` - multi-round loop, constants MAX_ROUNDS/COMPLAINTS_PER_ROUND
+- `src/contents/complaints/handlers/optimized-handler.js` - totalReviewsSynced metric
+
+**Commits:**
+- `81bf430` - fix(api): correct endpoint URL for complaint sent status
+- `53dd9d2` - feat(diagnostic): add multi-round complaints processing
+- `00987e9` - feat(handler): add totalReviewsSynced metric and parse all pages
+
+---
+
 #### 2026-02-02: Documentation System Created
 
 **Change Type:** Internal documentation
