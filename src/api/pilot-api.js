@@ -188,7 +188,8 @@ class PilotAPI {
 
     // Если storeId не указан, используем текущий
     const targetStoreId = storeId || this.storeId;
-    const url = `${this.baseURL}/api/stores/${targetStoreId}/reviews/${reviewId}/complaint/sent`;
+    // ВАЖНО: Используем /api/extension/... endpoint (исправлено 2026-02-03)
+    const url = `${this.baseURL}/api/extension/stores/${targetStoreId}/reviews/${reviewId}/complaint/sent`;
 
     const body = {
       sentAt: metadata.sentAt || new Date().toISOString(),
