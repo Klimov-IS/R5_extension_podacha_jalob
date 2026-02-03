@@ -926,7 +926,9 @@ class OptimizedHandler {
 
     static async runTest3Diagnostics(options = {}) {
       const complaints = options.complaints || [];
-      const LIMIT = 20; // Лимит для тестирования
+      // ВРЕМЕННОЕ РЕШЕНИЕ: Лимит убран для полного парсинга всех клиентов
+      // TODO: Вернуть лимит после завершения парсинга
+      // const LIMIT = 20;
 
       const report = {
         timestamp: new Date().toISOString(),
@@ -950,13 +952,12 @@ class OptimizedHandler {
         return report;
       }
 
-      // Ограничиваем количество жалоб
-      const limitedComplaints = complaints.slice(0, LIMIT);
-      console.log(`📋 Используем ${limitedComplaints.length} жалоб для теста`);
+      // Без лимита - обрабатываем все жалобы
+      console.log(`📋 Обрабатываем все ${complaints.length} жалоб`);
 
       // Группируем по артикулам
       const groupedByArticle = new Map();
-      for (const complaint of limitedComplaints) {
+      for (const complaint of complaints) {
         if (!complaint.productId) continue;
         if (!groupedByArticle.has(complaint.productId)) {
           groupedByArticle.set(complaint.productId, []);
@@ -1141,11 +1142,11 @@ class OptimizedHandler {
 
       // Финальный статус
       const successRate = report.complaintsReceived > 0
-        ? ((report.reviewsFound / limitedComplaints.length) * 100).toFixed(1)
+        ? ((report.reviewsFound / complaints.length) * 100).toFixed(1)
         : 0;
 
       report.overallStatus = report.reviewsFound > 0
-        ? `✅ SUCCESS - найдено ${report.reviewsFound}/${limitedComplaints.length} (${successRate}%)`
+        ? `✅ SUCCESS - найдено ${report.reviewsFound}/${complaints.length} (${successRate}%)`
         : '❌ FAILED - ничего не найдено';
 
       // Выводим итоговый отчёт
@@ -1154,7 +1155,7 @@ class OptimizedHandler {
       console.log('═══════════════════════════════════════════════════════════════');
       console.log(`📥 Жалоб получено от API:    ${report.complaintsReceived}`);
       console.log(`📦 Уникальных артикулов:     ${report.uniqueArticles}`);
-      console.log(`✅ Отзывов найдено:          ${report.reviewsFound} / ${limitedComplaints.length} (${successRate}%)`);
+      console.log(`✅ Отзывов найдено:          ${report.reviewsFound} / ${complaints.length} (${successRate}%)`);
       console.log(`❌ Не найдено:               ${report.reviewsNotFound}`);
       console.log('');
       console.log('📊 Статусы найденных отзывов:');
@@ -1187,7 +1188,10 @@ class OptimizedHandler {
     static async runTest4Diagnostics(options = {}) {
       const complaints = options.complaints || [];
       const storeId = options.storeId || null;
-      const LIMIT = 20; // Лимит для тестирования
+
+      // ВРЕМЕННОЕ РЕШЕНИЕ: Лимит убран для полного парсинга всех клиентов
+      // TODO: Вернуть лимит после завершения парсинга
+      // const LIMIT = 20;
 
       const report = {
         timestamp: new Date().toISOString(),
@@ -1203,7 +1207,8 @@ class OptimizedHandler {
         cancelled: false,
         statusStats: {},
         articleResults: [],
-        overallStatus: null
+        overallStatus: null,
+        totalReviewsSynced: 0
       };
 
       console.log('\n🚀 ========== ТЕСТ 4: ФИНАЛЬНЫЙ ИНТЕГРАЦИОННЫЙ ТЕСТ ==========\n');
@@ -1216,13 +1221,12 @@ class OptimizedHandler {
         return report;
       }
 
-      // Ограничиваем количество жалоб
-      const limitedComplaints = complaints.slice(0, LIMIT);
-      console.log(`📋 Используем ${limitedComplaints.length} жалоб для теста`);
+      // Без лимита - обрабатываем все жалобы
+      console.log(`📋 Обрабатываем все ${complaints.length} жалоб`);
 
       // Группируем по артикулам
       const groupedByArticle = new Map();
-      for (const complaint of limitedComplaints) {
+      for (const complaint of complaints) {
         if (!complaint.productId) continue;
         if (!groupedByArticle.has(complaint.productId)) {
           groupedByArticle.set(complaint.productId, []);
@@ -1242,7 +1246,7 @@ class OptimizedHandler {
           incrementSkipped: () => report.skipped++,
           incrementErrors: () => report.errors++,
           getStats: () => ({ remaining: report.complaintsReceived - report.submitted - report.skipped - report.errors }),
-          totalComplaints: limitedComplaints.length
+          totalComplaints: complaints.length
         },
         processedComplaints: []
       };
@@ -1287,9 +1291,14 @@ class OptimizedHandler {
         let pageNumber = 1;
         const MAX_PAGES = 10;
 
-        // Сканируем страницы
-        while (remainingKeys.size > 0 && pageNumber <= MAX_PAGES && !window.stopProcessing && !report.cancelled) {
-          console.log(`📄 Страница ${pageNumber}: ищем ${remainingKeys.size} отзывов...`);
+        // ========== ВРЕМЕННОЕ РЕШЕНИЕ ==========
+        // Парсим ВСЕ страницы артикула (не только те, где есть совпадения с жалобами)
+        // чтобы собрать статусы ВСЕХ отзывов в БД.
+        // TODO: Убрать после полного парсинга всех клиентов WB
+        // ========================================
+        while (pageNumber <= MAX_PAGES && !window.stopProcessing && !report.cancelled) {
+          const pendingComplaints = remainingKeys.size;
+          console.log(`📄 Страница ${pageNumber}: парсим все отзывы${pendingComplaints > 0 ? `, ищем ${pendingComplaints} жалоб` : ''}...`);
 
           const table = window.ElementFinder.findReviewsTable();
           if (!table) {
@@ -1323,6 +1332,7 @@ class OptimizedHandler {
               key: reviewData.key,
               statuses: statuses
             });
+            report.totalReviewsSynced++;
 
             if (remainingKeys.has(normalizedPageKey)) {
               const complaint = complaintsMap.get(normalizedPageKey);
@@ -1419,11 +1429,12 @@ class OptimizedHandler {
               });
           }
 
-          // Если ещё есть что искать - переходим на следующую страницу
-          if (remainingKeys.size > 0 && !window.stopProcessing && !report.cancelled) {
+          // ВРЕМЕННОЕ РЕШЕНИЕ: Всегда переходим на следующую страницу для полного парсинга
+          // TODO: Вернуть условие remainingKeys.size > 0 после парсинга всех клиентов
+          if (!window.stopProcessing && !report.cancelled) {
             const hasNext = await window.NavigationService.goToNextPage();
             if (!hasNext) {
-              console.log(`⚠️ Достигнута последняя страница`);
+              console.log(`✅ Достигнута последняя страница артикула ${productId}`);
               break;
             }
             pageNumber++;
@@ -1472,6 +1483,7 @@ class OptimizedHandler {
       console.log(`📦 Уникальных артикулов:     ${report.uniqueArticles}`);
       console.log(`✅ Отзывов найдено:          ${report.reviewsFound}`);
       console.log(`❌ Не найдено:               ${report.reviewsNotFound}`);
+      console.log(`📤 Синхронизировано в БД:    ${report.totalReviewsSynced}`);
       console.log('');
       console.log(`🎯 Можно подать жалобу:      ${report.canSubmitComplaint}`);
       console.log(`📝 Уже обработаны:           ${report.alreadyProcessed}`);
