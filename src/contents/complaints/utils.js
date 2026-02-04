@@ -424,27 +424,27 @@
       console.log(`[WBUtils] Найдено ${paginationButtons.length} кнопок пагинации`);
     }
 
-    // Проверяем что найдены все 4 кнопки
-    if (paginationButtons.length < 4) {
-      if (verbose) console.log('[WBUtils] ❌ Найдено меньше 4 кнопок пагинации, структура изменилась?');
+    // Проверяем что найдены все 5 кнопок (WB добавил 5-ю кнопку 04.02.2026)
+    if (paginationButtons.length < 5) {
+      if (verbose) console.log(`[WBUtils] ❌ Найдено ${paginationButtons.length} кнопок пагинации, ожидалось 5`);
       return null;
     }
 
     // Логируем все кнопки для диагностики
     if (verbose) {
-      const buttonLabels = ['В начало ◀◀', 'Предыдущая ◀', 'Следующая ▶', 'В конец ▶▶'];
+      const buttonLabels = ['В начало ◀◀', 'Предыдущая ◀', '??? (новая)', 'Следующая ▶', 'В конец ▶▶'];
       paginationButtons.forEach((btn, index) => {
         const isDisabled = btn.disabled || btn.hasAttribute('disabled');
-        console.log(`[WBUtils] Кнопка [${index}] "${buttonLabels[index]}": disabled=${isDisabled}`);
+        console.log(`[WBUtils] Кнопка [${index}] "${buttonLabels[index] || '?'}": disabled=${isDisabled}`);
       });
     }
 
-    // ✅ ФИКСИРОВАННАЯ ПОЗИЦИЯ: кнопка "Следующая" на индексе [2]
-    // Проверено консольным тестом 01.02.2026 (docs/HTML/Пагинация.html)
-    const nextButton = paginationButtons[2];
+    // ✅ ФИКСИРОВАННАЯ ПОЗИЦИЯ: кнопка "Следующая" на индексе [3]
+    // Обновлено 04.02.2026 - WB добавил 5-ю кнопку, индекс сместился с [2] на [3]
+    const nextButton = paginationButtons[3];
 
     if (!nextButton) {
-      if (verbose) console.log('[WBUtils] ❌ Кнопка с индексом [2] не найдена');
+      if (verbose) console.log('[WBUtils] ❌ Кнопка с индексом [3] не найдена');
       return null;
     }
 
@@ -453,9 +453,9 @@
 
     if (verbose) {
       if (isDisabled) {
-        console.log('[WBUtils] ⚠️ Кнопка "Следующая страница" [2] найдена, но disabled (последняя страница)');
+        console.log('[WBUtils] ⚠️ Кнопка "Следующая страница" [3] найдена, но disabled (последняя страница)');
       } else {
-        console.log('[WBUtils] ✅ Кнопка "Следующая страница" [2] найдена и активна');
+        console.log('[WBUtils] ✅ Кнопка "Следующая страница" [3] найдена и активна');
       }
     }
 
