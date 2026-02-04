@@ -301,18 +301,19 @@ const SEARCH_SELECTORS = {
 ```javascript
 const PAGINATION_SELECTORS = {
   arrows: '[class*="Token-pagination__arrow"]',
-  // Fixed positions:
+  // Fixed positions (updated 04.02.2026 - WB added 5th button):
   // [0] = First page (◀◀)
   // [1] = Previous page (◀)
-  // [2] = Next page (▶) <-- IMPORTANT
-  // [3] = Last page (▶▶)
-  nextPageIndex: 2
+  // [2] = ??? (new button)
+  // [3] = Next page (▶) <-- IMPORTANT
+  // [4] = Last page (▶▶)
+  nextPageIndex: 3
 };
 ```
 
 **Code location:** `utils.js:findNextPageButton()`
 
-**Important:** Button at index [2] is "Next page", verified February 2026.
+**Important:** Button at index [3] is "Next page". Updated 04.02.2026 - WB added 5th button, index shifted from [2] to [3].
 
 ---
 

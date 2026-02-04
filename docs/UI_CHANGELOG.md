@@ -21,6 +21,30 @@ Each entry should include:
 
 ### February 2026
 
+#### 2026-02-04: Pagination Button Index Fix
+
+**UI Change:**
+- WB added 5th pagination button
+- Old structure: 4 buttons `[First, Prev, Next, Last]`
+- New structure: 5 buttons `[First, Prev, ???, Next, Last]`
+
+**Impact:**
+- Page navigation stopped working
+- `findNextPageButton()` returned wrong button (index [2] instead of [3])
+- Extension could not scan multiple pages
+
+**Fix:**
+- Changed pagination button index from `[2]` to `[3]`
+- Updated button count check from 4 to 5
+
+**Files Updated:**
+- `src/contents/complaints/utils.js:findNextPageButton()` - index [2] → [3]
+- `docs/SELECTORS.md` - pagination section
+
+**Commit:** `cd3607f` - fix(pagination): update button index from [2] to [3]
+
+---
+
 #### 2026-02-03: Multi-Round Processing & API Fix (v2.2.0)
 
 **Change Type:** Feature + Bug fix
