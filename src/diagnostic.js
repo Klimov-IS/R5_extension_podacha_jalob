@@ -83,7 +83,12 @@ async function loadStores() {
     activeStores.forEach(store => {
       const option = document.createElement('option');
       option.value = store.id;
-      option.textContent = store.name;
+
+      // Форматируем количество жалоб к подаче (API v1.2.0)
+      const count = store.draftComplaintsCount || 0;
+      const countText = count === 0 ? '' : count > 99 ? ' — 99+ жалоб' : ` — ${count} жалоб`;
+      option.textContent = store.name + countText;
+
       storeSelect.appendChild(option);
     });
 

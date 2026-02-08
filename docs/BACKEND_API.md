@@ -69,12 +69,14 @@ Content-Type: application/json
   {
     "id": "store_123",
     "name": "Store Name",
-    "isActive": true
+    "isActive": true,
+    "draftComplaintsCount": 45
   },
   {
     "id": "store_456",
     "name": "Another Store",
-    "isActive": false
+    "isActive": false,
+    "draftComplaintsCount": 0
   }
 ]
 ```
@@ -86,6 +88,10 @@ Content-Type: application/json
 | id | string | Unique store identifier |
 | name | string | Human-readable store name |
 | isActive | boolean | Whether the store is active |
+| draftComplaintsCount | number | **NEW (v1.2.0):** Count of complaints in `draft` status for active products |
+
+> **Note:** `draftComplaintsCount` only includes complaints for products with `work_status = 'active'`.
+> Products "on stop" are excluded from the count.
 
 **Usage:** `diagnostic.js:loadStores()`
 

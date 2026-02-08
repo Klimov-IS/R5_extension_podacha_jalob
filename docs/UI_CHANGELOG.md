@@ -21,6 +21,27 @@ Each entry should include:
 
 ### February 2026
 
+#### 2026-02-08: Store Dropdown Shows Draft Complaints Count
+
+**Change Type:** Feature (API v1.2.0)
+
+**What Changed:**
+- Backend API now returns `draftComplaintsCount` in `/api/extension/stores` response
+- Extension displays complaint count next to store name in dropdown
+
+**UI Update:**
+- Store dropdown now shows: `ИП Артюшина — 45 жалоб`
+- If count is 0: no suffix shown
+- If count > 99: shows `99+ жалоб`
+
+**Files Updated:**
+- `src/diagnostic.js:loadStores()` - format store name with count
+- `docs/BACKEND_API.md` - added `draftComplaintsCount` field documentation
+
+**Commit:** TBD
+
+---
+
 #### 2026-02-04: Pagination Button Index Fix
 
 **UI Change:**
