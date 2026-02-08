@@ -73,6 +73,7 @@ async function loadStores() {
 
     const stores = await response.json();
     console.log(`[Diagnostic] Получено магазинов: ${stores.length}`);
+    console.log('[Diagnostic] Пример ответа API (первый магазин):', stores[0]);
 
     // Заполняем дропдаун
     storeSelect.innerHTML = '<option value="">-- Выберите магазин --</option>';
@@ -86,7 +87,7 @@ async function loadStores() {
 
       // Форматируем количество жалоб к подаче (API v1.2.0)
       const count = store.draftComplaintsCount || 0;
-      const countText = count === 0 ? '' : count > 99 ? ' — 99+ жалоб' : ` — ${count} жалоб`;
+      const countText = count === 0 ? '' : ` — ${count} жалоб`;
       option.textContent = store.name + countText;
 
       storeSelect.appendChild(option);

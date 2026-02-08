@@ -32,7 +32,7 @@ Each entry should include:
 **UI Update:**
 - Store dropdown now shows: `ИП Артюшина — 45 жалоб`
 - If count is 0: no suffix shown
-- If count > 99: shows `99+ жалоб`
+- Shows exact count (no limit)
 
 **Files Updated:**
 - `src/diagnostic.js:loadStores()` - format store name with count
