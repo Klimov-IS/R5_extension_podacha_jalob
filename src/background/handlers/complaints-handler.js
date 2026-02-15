@@ -59,15 +59,18 @@ export class ComplaintsHandler {
   async sendComplaint(message) {
     const { storeId, reviewId } = message;
 
+    console.log('[ComplaintsHandler] 📥 Получен запрос sendComplaint:', { storeId, reviewId });
+
     if (!storeId || !reviewId) {
-      console.error('[ComplaintsHandler] ❌ Недостаточно параметров');
+      console.error('[ComplaintsHandler] ❌ Недостаточно параметров:', { storeId, reviewId });
       return { error: 'storeId и reviewId обязательны' };
     }
 
-    console.log('[ComplaintsHandler] Отправка жалобы:', { storeId, reviewId });
+    console.log('[ComplaintsHandler] 🔄 Вызываем pilotAPI.markComplaintAsSent...');
 
     try {
       const data = await pilotAPI.markComplaintAsSent(storeId, reviewId);
+      console.log('[ComplaintsHandler] ✅ API ответ:', data);
 
       // Записываем успешную отправку в трекер
       apiSessionTracker.recordSentComplaint(reviewId, true, 200);

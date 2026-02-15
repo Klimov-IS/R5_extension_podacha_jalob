@@ -56,8 +56,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function loadStores() {
   console.log('[Diagnostic] Загрузка магазинов...');
+  const startTime = performance.now();
 
   try {
+    console.log('[Diagnostic] ⏱️ Начало fetch...');
+    const fetchStart = performance.now();
+
     const response = await fetch(`${BACKEND_ENDPOINT}/api/extension/stores`, {
       headers: {
         'Authorization': `Bearer ${BACKEND_TOKEN}`,
@@ -65,13 +69,16 @@ async function loadStores() {
       }
     });
 
+    console.log(`[Diagnostic] ⏱️ Fetch завершён за ${(performance.now() - fetchStart).toFixed(0)} мс`);
     console.log(`[Diagnostic] Ответ: ${response.status}`);
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
+    const jsonStart = performance.now();
     const stores = await response.json();
+    console.log(`[Diagnostic] ⏱️ JSON парсинг за ${(performance.now() - jsonStart).toFixed(0)} мс`);
     console.log(`[Diagnostic] Получено магазинов: ${stores.length}`);
     console.log('[Diagnostic] Пример ответа API (первый магазин):', stores[0]);
 
@@ -96,6 +103,7 @@ async function loadStores() {
     console.log(`[Diagnostic] Активных магазинов: ${activeStores.length} из ${stores.length}`);
 
     storeSelect.disabled = false;
+    console.log(`[Diagnostic] ⏱️ ИТОГО загрузка магазинов: ${(performance.now() - startTime).toFixed(0)} мс`);
     console.log('[Diagnostic] Магазины загружены');
 
   } catch (error) {

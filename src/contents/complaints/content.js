@@ -454,8 +454,48 @@ function injectMainWorldBundle() {
       }
     });
 
+    // ========================================================================
+    // BRIDGE: Send Complaint с поддержкой ответов
+    // MAIN world → ISOLATED world → Background → ISOLATED world → MAIN world
+    // ========================================================================
+
+    window.addEventListener('wb-send-complaint-request', async (event) => {
+      const { requestId, storeId, reviewId } = event.detail;
+
+      console.log(`[Complaints] 📤 SendComplaint request: storeId=${storeId}, reviewId=${reviewId}`);
+
+      try {
+        const response = await chrome.runtime.sendMessage({
+          type: 'sendComplaint',
+          storeId: storeId,
+          reviewId: reviewId
+        });
+
+        console.log(`[Complaints] ✅ SendComplaint response:`, response);
+
+        // Отправляем ответ обратно в MAIN world
+        window.dispatchEvent(new CustomEvent('wb-send-complaint-response', {
+          detail: {
+            requestId: requestId,
+            response: response
+          }
+        }));
+      } catch (error) {
+        console.error(`[Complaints] ❌ Ошибка sendComplaint:`, error);
+
+        // Отправляем ошибку в MAIN world
+        window.dispatchEvent(new CustomEvent('wb-send-complaint-response', {
+          detail: {
+            requestId: requestId,
+            response: { error: error.message }
+          }
+        }));
+      }
+    });
+
     console.log('[Complaints] 🌉 Bridge для отправки сообщений установлен');
     console.log('[Complaints] 🔄 Bridge для Status Sync установлен');
+    console.log('[Complaints] 📤 Bridge для SendComplaint установлен');
 
     window.hasListenerAdded = true;
     console.log('[Complaints] ✅ Content script полностью инициализирован');

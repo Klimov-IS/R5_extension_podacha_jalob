@@ -58,7 +58,7 @@
       try {
         // ============ ПРОВЕРКА НА "ЖАЛОБА ОТКЛОНЕНА" ============
         if (this._isAlreadyProcessed(row)) {
-          return this._handleAlreadyProcessed(complaint, complaintStartTime);
+          return await this._handleAlreadyProcessed(complaint, complaintStartTime);
         }
 
         // ============ ОТКРЫТИЕ МЕНЮ ОТЗЫВА ============
@@ -83,7 +83,7 @@
 
         if (complaintBtn.disabled) {
           window.ElementFinder.closeOpenDropdown();
-          return this._handleAlreadyProcessed(complaint, complaintStartTime);
+          return await this._handleAlreadyProcessed(complaint, complaintStartTime);
         }
 
         // Кликаем по кнопке жалобы
@@ -140,12 +140,18 @@
         window.WBUtils.clearModalState(modal);
 
         if (sent) {
-          // Отмечаем в API
-          chrome.runtime.sendMessage({
-            type: "sendComplaint",
-            storeId: this.storeId,
-            reviewId: complaint.id,
-          });
+          // Отмечаем в API как отправленную (draft → pending)
+          // Используем bridge через CustomEvent (main world → isolated world → background)
+          console.log(`[ComplaintService] 📤 Вызываем sendComplaint API: storeId=${this.storeId}, reviewId=${complaint.id}`);
+          try {
+            const apiResponse = await this._sendComplaintViabridge(this.storeId, complaint.id);
+            console.log(`[ComplaintService] 📥 Ответ sendComplaint API:`, apiResponse);
+            if (apiResponse?.error) {
+              console.warn(`[ComplaintService] ⚠️ API вернул ошибку:`, apiResponse.error);
+            }
+          } catch (apiErr) {
+            console.error(`[ComplaintService] ❌ Ошибка вызова sendComplaint:`, apiErr);
+          }
 
           const complaintDuration = ((Date.now() - complaintStartTime) / 1000).toFixed(1);
           this.progressService.log("success", `✅ Жалоба ${complaintIndex} отправлена (⏱️ ${complaintDuration}с)`);
@@ -200,6 +206,43 @@
     }
 
     /**
+     * Отправить запрос sendComplaint через bridge (main world → isolated world → background)
+     * @private
+     * @param {string} storeId - ID магазина
+     * @param {string} reviewId - ID отзыва
+     * @returns {Promise<Object>} - ответ от API
+     */
+    _sendComplaintViabridge(storeId, reviewId) {
+      return new Promise((resolve, reject) => {
+        const requestId = `complaint_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const timeout = 10000; // 10 секунд таймаут
+
+        const timeoutId = setTimeout(() => {
+          window.removeEventListener('wb-send-complaint-response', responseHandler);
+          reject(new Error('Timeout waiting for sendComplaint response'));
+        }, timeout);
+
+        const responseHandler = (event) => {
+          if (event.detail.requestId === requestId) {
+            clearTimeout(timeoutId);
+            window.removeEventListener('wb-send-complaint-response', responseHandler);
+            resolve(event.detail.response);
+          }
+        };
+
+        window.addEventListener('wb-send-complaint-response', responseHandler);
+
+        window.dispatchEvent(new CustomEvent('wb-send-complaint-request', {
+          detail: {
+            requestId: requestId,
+            storeId: storeId,
+            reviewId: reviewId
+          }
+        }));
+      });
+    }
+
+    /**
      * Проверить, была ли уже подана жалоба
      * @private
      */
@@ -212,16 +255,19 @@
      * Обработать случай когда жалоба уже подана
      * @private
      */
-    _handleAlreadyProcessed(complaint, startTime) {
+    async _handleAlreadyProcessed(complaint, startTime) {
       console.warn(`⚠️ Отзыв ${complaint.id}: жалоба уже подана/отклонена, пропускаем`);
       this.progressService.log("warn", `⚠️ Жалоба (арт. ${complaint.productId}): уже подана или отклонена - пропускаем`);
 
-      // Отмечаем в API
-      chrome.runtime.sendMessage({
-        type: "sendComplaint",
-        storeId: this.storeId,
-        reviewId: complaint.id,
-      });
+      // Отмечаем в API как отправленную (draft → pending)
+      // Используем bridge через CustomEvent (main world → isolated world → background)
+      console.log(`[ComplaintService] 📤 Вызываем sendComplaint API (skipped): storeId=${this.storeId}, reviewId=${complaint.id}`);
+      try {
+        const apiResponse = await this._sendComplaintViabridge(this.storeId, complaint.id);
+        console.log(`[ComplaintService] 📥 Ответ sendComplaint API (skipped):`, apiResponse);
+      } catch (apiErr) {
+        console.error(`[ComplaintService] ❌ Ошибка вызова sendComplaint (skipped):`, apiErr);
+      }
 
       // Сохраняем для отчета
       this.processedComplaints.push({
