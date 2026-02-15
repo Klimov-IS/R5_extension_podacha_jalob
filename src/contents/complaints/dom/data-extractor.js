@@ -344,14 +344,15 @@
      *   rating: 1,
      *   reviewDate: "2026-01-18T15:17:00.000Z", // ISO 8601
      *   key: "187489568_1_2026-01-18T15:17:00.000Z",
-     *   text: "Текст отзыва...",
      *   statuses: ["Виден", "Жалоба отклонена", "Выкуп"]
      * }
+     *
+     * Note: text field removed for memory optimization (not used in complaint flow).
+     * Use getReviewText(row) directly if needed.
      */
     static extractReviewData(row, currentArticle) {
       const reviewDate = this.getReviewDate(row); // Теперь возвращает ISO 8601
       const rating = this.getRating(row);
-      const text = this.getReviewText(row);
       const statuses = this.getReviewStatuses(row);
 
       if (!reviewDate || !rating) {
@@ -365,7 +366,6 @@
         rating: rating,
         reviewDate: reviewDate, // ISO 8601 формат
         key: reviewKey,
-        text: text,
         statuses: statuses
       };
     }
@@ -374,4 +374,4 @@
   // Экспортируем в глобальную область для использования в content scripts
   window.DataExtractor = DataExtractor;
 
-console.log('[DataExtractor] Модуль успешно загружен');
+// Module loaded

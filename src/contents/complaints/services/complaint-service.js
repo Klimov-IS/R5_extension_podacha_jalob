@@ -524,4 +524,4 @@
   // Экспортируем в глобальную область
   window.ComplaintService = ComplaintService;
 
-console.log('[ComplaintService] Модуль успешно загружен');
+// Module loaded

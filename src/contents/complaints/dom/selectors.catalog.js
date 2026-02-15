@@ -249,4 +249,4 @@ window.SELECTORS = {
   TIMING
 };
 
-console.log('[Selectors Catalog] Loaded successfully');
+// Module loaded

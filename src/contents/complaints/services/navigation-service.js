@@ -213,4 +213,4 @@
   // Экспортируем в глобальную область
   window.NavigationService = NavigationService;
 
-console.log('[NavigationService] Модуль успешно загружен');
+// Module loaded

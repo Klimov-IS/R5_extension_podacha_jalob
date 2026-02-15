@@ -220,6 +220,8 @@ async function submitComplaints() {
   btnSubmit.disabled = true;
   btnSubmit.textContent = '⏳ Подача...';
   hideError();
+  hidePreview(); // Memory: очищаем превью (большой HTML)
+  previewAccordion.innerHTML = '';
   showProgress('Поиск вкладки WB...');
 
   // Накопительная статистика за все раунды
@@ -367,6 +369,9 @@ async function submitComplaints() {
     hideProgress();
     showError(error.message);
   } finally {
+    // Memory cleanup: очищаем загруженные жалобы (уже отправлены в WB tab)
+    loadedComplaints = [];
+    totalStats.uniqueArticles.clear();
     resetUI();
   }
 }

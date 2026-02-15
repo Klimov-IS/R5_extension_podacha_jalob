@@ -39,7 +39,7 @@ import './handlers/optimized-handler.js';   // window.OptimizedHandler
 // УВЕДОМЛЕНИЕ О ГОТОВНОСТИ
 // ========================================================================
 
-console.log('[MainWorldBundle] Все модули загружены в MAIN world');
+// Bundle ready (console output reduced for memory optimization)
 
 // Отправляем событие что bundle готов к использованию
 // content.js (в ISOLATED world) будет слушать это событие

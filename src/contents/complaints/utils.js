@@ -511,4 +511,4 @@
     waitWhilePaused
   };
 
-console.log('[WBUtils] Утилиты успешно загружены');
+// Module loaded

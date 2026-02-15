@@ -283,4 +283,4 @@
   // Экспортируем в глобальную область для использования в content scripts
   window.ElementFinder = ElementFinder;
 
-console.log('[ElementFinder] Модуль успешно загружен');
+// Module loaded

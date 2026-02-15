@@ -72,6 +72,8 @@ class OptimizedHandler {
       report.uniqueArticles = groupedByArticle.size;
 
       // Создаем контекст для ComplaintService
+      // processedComplaints: используем минимальный массив, очищаем после каждого артикула
+      const processedComplaints = [];
       const context = {
         storeId,
         progressService: {
@@ -82,7 +84,7 @@ class OptimizedHandler {
           getStats: () => ({ remaining: report.complaintsReceived - report.submitted - report.skipped - report.errors }),
           totalComplaints: complaints.length
         },
-        processedComplaints: []
+        processedComplaints
       };
 
       // Обрабатываем каждый артикул
@@ -237,7 +239,9 @@ class OptimizedHandler {
           // Синхронизируем ВСЕ отзывы страницы (не только совпавшие с жалобами)
           if (pageReviewsToSync.length > 0 && storeId) {
             // Запускаем синхронизацию в фоне (не ждём завершения)
-            this.syncReviewStatuses(storeId, pageReviewsToSync)
+            // Копируем данные чтобы pageReviewsToSync мог быть GC'd после цикла
+            const syncData = pageReviewsToSync.splice(0);
+            this.syncReviewStatuses(storeId, syncData)
               .catch(() => {
                 // sync error handled silently
               });
@@ -266,6 +270,9 @@ class OptimizedHandler {
 
         report.articleResults.push(articleResult);
 
+        // Memory cleanup: очищаем processedComplaints после каждого артикула
+        processedComplaints.length = 0;
+
         // Пауза между артикулами
         if (articleIndex < report.uniqueArticles && !window.stopProcessing && !report.cancelled) {
           await window.WBUtils.sleep(1500);
@@ -274,6 +281,22 @@ class OptimizedHandler {
 
       // Очищаем поиск
       await window.NavigationService.clearSearch();
+
+      // Memory cleanup: освобождаем тяжёлые структуры
+      groupedByArticle.clear();
+      processedComplaints.length = 0;
+
+      // Сжимаем articleResults — оставляем только счётчики, убираем массивы ключей
+      for (const ar of report.articleResults) {
+        ar.foundCount = ar.found.length;
+        ar.notFoundCount = ar.notFound.length;
+        ar.submittedCount = ar.submitted.length;
+        ar.skippedCount = ar.skipped.length;
+        ar.found = [];
+        ar.notFound = [];
+        ar.submitted = [];
+        ar.skipped = [];
+      }
 
       // Финальный статус
       if (report.cancelled) {
@@ -379,4 +402,4 @@ class OptimizedHandler {
   // Экспортируем в глобальную область
   window.OptimizedHandler = OptimizedHandler;
 
-console.log('[OptimizedHandler] Модуль успешно загружен');
+// Module loaded silently (memory optimization: reduce console accumulation)
