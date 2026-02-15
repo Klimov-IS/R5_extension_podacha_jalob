@@ -72,50 +72,8 @@ window.addEventListener('wb-call-main-world', async (event) => {
   const { action, data, requestId } = event.detail;
 
   try {
-    if (action === 'processComplaintsFromAPI') {
-      // Создаем кнопку остановки
-      window.OptimizedHandler.createStopButton();
-
-      // Обрабатываем жалобы
-      await window.OptimizedHandler.handle(data);
-
-      // Удаляем кнопку после завершения
-      const stopBtn = document.getElementById('stopButtonWB');
-      if (stopBtn) stopBtn.remove();
-
-      // Отправляем успешный результат
-      window.dispatchEvent(new CustomEvent('wb-main-world-response', {
-        detail: { requestId, success: true }
-      }));
-    } else if (action === 'checkOptimizedHandler') {
-      // Проверка доступности OptimizedHandler
-      const available = typeof window.OptimizedHandler !== 'undefined';
-      window.dispatchEvent(new CustomEvent('wb-main-world-response', {
-        detail: { requestId, success: true, data: { available } }
-      }));
-    } else if (action === 'runDiagnostics') {
-      // Запуск диагностики DOM элементов
-      const report = await window.OptimizedHandler.runDiagnostics();
-
-      window.dispatchEvent(new CustomEvent('wb-main-world-response', {
-        detail: { requestId, success: true, data: report }
-      }));
-    } else if (action === 'runExtendedDiagnostics') {
-      // Расширенная диагностика (End-to-End тест)
-      const report = await window.OptimizedHandler.runExtendedDiagnostics();
-
-      window.dispatchEvent(new CustomEvent('wb-main-world-response', {
-        detail: { requestId, success: true, data: report }
-      }));
-    } else if (action === 'runTest3Diagnostics') {
-      // Тест 3: Интеграция с Backend API
-      const report = await window.OptimizedHandler.runTest3Diagnostics(data);
-
-      window.dispatchEvent(new CustomEvent('wb-main-world-response', {
-        detail: { requestId, success: true, data: report }
-      }));
-    } else if (action === 'runTest4Diagnostics') {
-      // Тест 4: Полная интеграция с реальной подачей жалоб
+    if (action === 'runTest4Diagnostics') {
+      // Обработка жалоб с реальной подачей
       const report = await window.OptimizedHandler.runTest4Diagnostics(data);
 
       window.dispatchEvent(new CustomEvent('wb-main-world-response', {

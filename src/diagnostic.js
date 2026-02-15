@@ -299,8 +299,8 @@ async function submitComplaints() {
       totalStats.errors += roundReport.errors || 0;
 
       // Собираем уникальные артикулы
-      if (roundReport.articles && Array.isArray(roundReport.articles)) {
-        roundReport.articles.forEach(a => totalStats.uniqueArticles.add(a));
+      if (roundReport.articleResults && Array.isArray(roundReport.articleResults)) {
+        roundReport.articleResults.forEach(a => totalStats.uniqueArticles.add(a.productId));
       }
 
       // Если раунд был отменён
