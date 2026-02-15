@@ -35,7 +35,9 @@
       }
 
       // Получаем данные ДО клика для проверки изменения
-      const tableBefore = document.querySelector(".Base-table-body__F-y98zdE6m");
+      const tableBefore = window.ElementFinder
+        ? window.ElementFinder.findReviewsTable()
+        : document.querySelector('[class*="Base-table-body"]') || document.querySelector('tbody');
       const rowsCountBefore = tableBefore?.children.length || 0;
       const firstRowDateBefore = tableBefore?.children[0]
         ? window.DataExtractor.getReviewDate(tableBefore.children[0])
@@ -51,7 +53,9 @@
       await window.WBUtils.sleep(4000);
 
       // Проверяем данные ПОСЛЕ клика
-      const tableAfter = document.querySelector(".Base-table-body__F-y98zdE6m");
+      const tableAfter = window.ElementFinder
+        ? window.ElementFinder.findReviewsTable()
+        : document.querySelector('[class*="Base-table-body"]') || document.querySelector('tbody');
       const rowsCountAfter = tableAfter?.children.length || 0;
       const firstRowDateAfter = tableAfter?.children[0]
         ? window.DataExtractor.getReviewDate(tableAfter.children[0])

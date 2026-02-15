@@ -30,7 +30,9 @@
      */
     static scanPageForReviews(complaintsMap, currentArticle) {
       const found = [];
-      const table = document.querySelector(".Base-table-body__F-y98zdE6m");
+      const table = window.ElementFinder
+        ? window.ElementFinder.findReviewsTable()
+        : document.querySelector('[class*="Base-table-body"]') || document.querySelector('tbody');
 
       if (!table || !table.children) {
         console.warn('[SearchService] Таблица не найдена');
