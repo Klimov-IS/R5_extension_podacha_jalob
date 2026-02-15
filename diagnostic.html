@@ -133,6 +133,17 @@
       cursor: not-allowed;
     }
 
+    .btn-icon {
+      width: 42px;
+      height: 42px;
+      padding: 0;
+      align-self: flex-end;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+
     .btn-primary {
       background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
       color: white;
@@ -504,6 +515,9 @@
             <option value="">Загрузка магазинов...</option>
           </select>
         </div>
+        <button id="btn-refresh-stores" class="btn btn-secondary btn-icon" title="Обновить список магазинов">
+          🔄
+        </button>
         <button id="btn-get-complaints" class="btn btn-secondary" style="align-self: flex-end;" disabled>
           📥 Получить жалобы
         </button>

@@ -29,6 +29,7 @@ const resultsCard = document.getElementById('results-card');
 const resultsBody = document.getElementById('results-body');
 const previewCard = document.getElementById('preview-card');
 const previewAccordion = document.getElementById('preview-accordion');
+const btnRefreshStores = document.getElementById('btn-refresh-stores');
 
 // Состояние
 let loadedComplaints = [];
@@ -46,12 +47,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 // ЗАГРУЗКА МАГАЗИНОВ
 // ========================================================================
 
-async function loadStores() {
-  const startTime = performance.now();
-
+async function loadStores(forceRefresh = false) {
   try {
-    // Используем StoreManager через background (с 5-минутным кэшем)
-    const response = await chrome.runtime.sendMessage({ type: 'getStores' });
+    const response = await chrome.runtime.sendMessage({
+      type: 'getStores',
+      forceRefresh
+    });
 
     if (!response || !response.success) {
       throw new Error(response?.error || 'Не удалось загрузить магазины');
@@ -85,6 +86,23 @@ async function loadStores() {
     storeSelect.innerHTML = '<option value="">Ошибка загрузки</option>';
   }
 }
+
+// ========================================================================
+// ОБНОВЛЕНИЕ МАГАЗИНОВ
+// ========================================================================
+
+btnRefreshStores.addEventListener('click', async () => {
+  btnRefreshStores.disabled = true;
+  storeSelect.disabled = true;
+  storeSelect.innerHTML = '<option value="">Обновление...</option>';
+  hideError();
+
+  try {
+    await loadStores(true);
+  } finally {
+    btnRefreshStores.disabled = false;
+  }
+});
 
 // ========================================================================
 // ВЫБОР МАГАЗИНА
