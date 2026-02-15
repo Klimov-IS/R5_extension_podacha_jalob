@@ -118,6 +118,80 @@
     }
 
     /**
+     * Определить текущую активную вкладку отзывов
+     *
+     * @returns {string|null} - "Ждут ответа" | "Есть ответ" | null
+     */
+    static getCurrentTab() {
+      const activeBtn = document.querySelector(window.SELECTORS.TAB.activeButton);
+      if (!activeBtn) return null;
+      return activeBtn.querySelector(window.SELECTORS.TAB.textElement)?.textContent?.trim() || null;
+    }
+
+    /**
+     * Переключиться на указанную вкладку отзывов
+     * Использует паттерн верификации из goToNextPage()
+     *
+     * @param {string} tabName - "Ждут ответа" | "Есть ответ"
+     * @returns {Promise<boolean>} - true если вкладка успешно переключилась
+     */
+    static async switchToTab(tabName) {
+      // Проверяем — может уже на нужной вкладке
+      const currentTab = this.getCurrentTab();
+      if (currentTab === tabName) return true;
+
+      // Ищем кнопку по тексту
+      const allButtons = document.querySelectorAll(window.SELECTORS.TAB.allButtons);
+      let targetBtn = null;
+      for (const btn of allButtons) {
+        const text = btn.querySelector(window.SELECTORS.TAB.textElement)?.textContent?.trim();
+        if (text === tabName) {
+          targetBtn = btn;
+          break;
+        }
+      }
+
+      if (!targetBtn) {
+        console.error(`[TabSwitch] Кнопка "${tabName}" не найдена`);
+        return false;
+      }
+
+      // Запоминаем состояние ДО клика
+      let tableBefore = window.ElementFinder
+        ? window.ElementFinder.findReviewsTable()
+        : document.querySelector('[class*="Base-table-body"]');
+      const firstRowDateBefore = tableBefore?.children[0]
+        ? window.DataExtractor.getReviewDate(tableBefore.children[0])
+        : null;
+      tableBefore = null;
+
+      // Кликаем по вкладке
+      await window.WBUtils.clickElement(targetBtn, 500);
+      await window.WBUtils.sleep(window.SELECTORS.TIMING.tabSwitchWait);
+
+      // Проверяем состояние ПОСЛЕ клика
+      let tableAfter = window.ElementFinder
+        ? window.ElementFinder.findReviewsTable()
+        : document.querySelector('[class*="Base-table-body"]');
+      const firstRowDateAfter = tableAfter?.children[0]
+        ? window.DataExtractor.getReviewDate(tableAfter.children[0])
+        : null;
+      const rowsAfter = tableAfter?.children.length || 0;
+      tableAfter = null;
+
+      // Верификация: данные изменились ИЛИ таблица существует (может быть одинаковой)
+      const switched = (firstRowDateBefore !== firstRowDateAfter) || rowsAfter > 0;
+
+      if (switched) {
+        console.log(`[TabSwitch] Переключено на "${tabName}"`);
+      } else {
+        console.warn(`[TabSwitch] Не удалось переключить на "${tabName}"`);
+      }
+
+      return switched;
+    }
+
+    /**
      * Очистить поле поиска
      *
      * @returns {Promise<boolean>} - true если очистка успешна

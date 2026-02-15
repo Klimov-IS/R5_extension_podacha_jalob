@@ -8,8 +8,8 @@
 'use strict';
 
 // Настройки многораундовой обработки
-const MAX_ROUNDS = 10;
 const COMPLAINTS_PER_ROUND = 300;
+const MAX_ROUNDS_SAFETY = 50; // Safety cap против бесконечного цикла
 
 // ========================================================================
 // DOM ЭЛЕМЕНТЫ
@@ -203,10 +203,9 @@ async function submitComplaints() {
   const confirmed = confirm(
     `ВНИМАНИЕ! РЕАЛЬНАЯ ПОДАЧА ЖАЛОБ!\n\n` +
     `Магазин: ${storeName}\n` +
-    `Первая порция: ${loadedComplaints.length} жалоб\n` +
-    `Макс. раундов: ${MAX_ROUNDS}\n\n` +
+    `Первая порция: ${loadedComplaints.length} жалоб\n\n` +
     `Система будет запрашивать жалобы порциями по ${COMPLAINTS_PER_ROUND},\n` +
-    `пока не останется 0 или не достигнут лимит раундов.\n\n` +
+    `пока API не вернёт меньше ${COMPLAINTS_PER_ROUND} (все обработаны).\n\n` +
     `Перед ПЕРВОЙ жалобой вы увидите заполненную форму для проверки.\n\n` +
     `Продолжить?`
   );
@@ -264,8 +263,8 @@ async function submitComplaints() {
     // ========================================================================
     let round = 1;
 
-    while (round <= MAX_ROUNDS) {
-      updateProgress(10 + (round - 1) * 8, `Раунд ${round}/${MAX_ROUNDS}: Получение жалоб...`);
+    while (round <= MAX_ROUNDS_SAFETY) {
+      updateProgress(10 + (round - 1) * 2, `Раунд ${round}: Получение жалоб...`);
 
       // 3. Запросить жалобы от API
       const apiResponse = await chrome.runtime.sendMessage({
@@ -289,7 +288,7 @@ async function submitComplaints() {
         break;
       }
 
-      updateProgress(15 + (round - 1) * 8, `Раунд ${round}/${MAX_ROUNDS}: Обработка ${complaints.length} жалоб...`);
+      updateProgress(15 + (round - 1) * 2, `Раунд ${round}: Обработка ${complaints.length} жалоб...`);
 
       // 4. Отправить на обработку в WB вкладку
       const response = await chrome.tabs.sendMessage(wbTab.id, {
@@ -327,19 +326,25 @@ async function submitComplaints() {
         break;
       }
 
+      // Условие выхода: API вернул меньше лимита — это была последняя порция
+      if (complaints.length < COMPLAINTS_PER_ROUND) {
+        totalStats.overallStatus = 'SUCCESS: Все жалобы обработаны';
+        break;
+      }
+
       // 6. Следующий раунд
       round++;
 
       // Пауза между раундами (2 секунды)
-      if (round <= MAX_ROUNDS) {
-        updateProgress(18 + (round - 2) * 8, `Пауза перед раундом ${round}...`);
+      if (round <= MAX_ROUNDS_SAFETY) {
+        updateProgress(18 + (round - 2) * 2, `Пауза перед раундом ${round}...`);
         await new Promise(resolve => setTimeout(resolve, 2000));
       }
     }
 
-    // Проверка на достижение лимита раундов
-    if (round > MAX_ROUNDS && totalStats.overallStatus === 'COMPLETED') {
-      totalStats.overallStatus = `WARNING: Достигнут лимит ${MAX_ROUNDS} раундов`;
+    // Проверка на достижение safety cap
+    if (round > MAX_ROUNDS_SAFETY && totalStats.overallStatus === 'COMPLETED') {
+      totalStats.overallStatus = `WARNING: Достигнут safety-лимит ${MAX_ROUNDS_SAFETY} раундов`;
     }
 
     // 7. Показать итоговые результаты
@@ -495,7 +500,7 @@ function displayResults(report) {
       label: 'Раундов выполнено',
       value: report.rounds || 1,
       status: 'info',
-      statusText: `из ${MAX_ROUNDS} макс.`
+      statusText: 'Выполнено'
     },
     {
       label: 'Жалоб получено из API',

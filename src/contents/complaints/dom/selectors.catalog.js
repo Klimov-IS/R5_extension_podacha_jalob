@@ -200,11 +200,24 @@ const PAGINATION_SELECTORS = {
 };
 
 /**
+ * Review Tabs - "Ждут ответа" / "Есть ответ" segment buttons
+ *
+ * Active tab has class containing "isActive".
+ * Both buttons share data-name="Segments".
+ */
+const TAB_SELECTORS = {
+  allButtons: 'button[data-name="Segments"]',
+  activeButton: 'button[data-name="Segments"][class*="isActive"]',
+  textElement: '[class*="Item__text"]'
+};
+
+/**
  * Timing constants (milliseconds)
  */
 const TIMING = {
   searchWait: 7500,      // Wait for search results
   pageNavWait: 4000,     // Wait for page change
+  tabSwitchWait: 4000,   // Wait for tab content reload
   modalWait: 1800,       // Wait for modal animation
   categoryWait: 500,     // Wait for textarea after category
   submitWait: 1500,      // Wait for submission
@@ -232,6 +245,7 @@ window.SELECTORS = {
   CLOSE_BUTTON: CLOSE_BUTTON_SELECTORS,
   SEARCH: SEARCH_SELECTORS,
   PAGINATION: PAGINATION_SELECTORS,
+  TAB: TAB_SELECTORS,
   TIMING
 };
 

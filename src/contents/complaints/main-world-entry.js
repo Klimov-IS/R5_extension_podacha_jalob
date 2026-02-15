@@ -22,6 +22,7 @@
 import './utils.js';
 
 // DOM модули
+import './dom/selectors.catalog.js';   // window.SELECTORS
 import './dom/data-extractor.js';      // window.DataExtractor
 import './dom/element-finder.js';      // window.ElementFinder
 
@@ -47,6 +48,7 @@ window.dispatchEvent(new CustomEvent('wb-content-bundle-ready', {
     timestamp: Date.now(),
     version: '2.0.0',
     modules: [
+      'SELECTORS',
       'WBUtils',
       'DataExtractor',
       'ElementFinder',

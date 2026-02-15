@@ -47,6 +47,7 @@ class OptimizedHandler {
         skipped: 0,
         errors: 0,
         cancelled: false,
+        tabSwitches: 0,
         statusStats: {},
         articleResults: [],
         overallStatus: null,
@@ -115,14 +116,24 @@ class OptimizedHandler {
         const remainingKeys = new Set(articleComplaints.map(c => this.normalizeReviewKey(c.reviewKey)));
         const complaintsMap = new Map(articleComplaints.map(c => [this.normalizeReviewKey(c.reviewKey), c]));
 
+        // ========== ЦИКЛ ПО ВКЛАДКАМ ==========
+        // Обрабатываем текущую вкладку, затем вторую (если остались ненайденные)
+        const currentTab = window.NavigationService.getCurrentTab();
+        const otherTab = currentTab === 'Есть ответ' ? 'Ждут ответа' : 'Есть ответ';
+        const tabOrder = [null, otherTab]; // null = текущая вкладка (без переключения)
+
+        for (const targetTab of tabOrder) {
+          if (remainingKeys.size === 0 || window.stopProcessing || report.cancelled) break;
+
+          if (targetTab !== null) {
+            const switched = await window.NavigationService.switchToTab(targetTab);
+            if (!switched) break;
+            report.tabSwitches++;
+          }
+
         let pageNumber = 1;
         const MAX_PAGES = 10;
 
-        // ========== ВРЕМЕННОЕ РЕШЕНИЕ ==========
-        // Парсим ВСЕ страницы артикула (не только те, где есть совпадения с жалобами)
-        // чтобы собрать статусы ВСЕХ отзывов в БД.
-        // TODO: Убрать после полного парсинга всех клиентов WB
-        // ========================================
         while (pageNumber <= MAX_PAGES && !window.stopProcessing && !report.cancelled) {
           const table = window.ElementFinder.findReviewsTable();
           if (!table) {
@@ -244,6 +255,8 @@ class OptimizedHandler {
             break;
           }
         }
+
+        } // end tab loop
 
         // Сохраняем ненайденные
         for (const key of remainingKeys) {
