@@ -7,13 +7,6 @@
 
 'use strict';
 
-// ========================================================================
-// КОНСТАНТЫ API
-// ========================================================================
-
-const BACKEND_ENDPOINT = 'http://158.160.217.236';
-const BACKEND_TOKEN = 'wbrm_0ab7137430d4fb62948db3a7d9b4b997';
-
 // Настройки многораундовой обработки
 const MAX_ROUNDS = 10;
 const COMPLAINTS_PER_ROUND = 300;
@@ -59,28 +52,15 @@ async function loadStores() {
   const startTime = performance.now();
 
   try {
-    console.log('[Diagnostic] ⏱️ Начало fetch...');
-    const fetchStart = performance.now();
+    // Используем StoreManager через background (с 5-минутным кэшем)
+    const response = await chrome.runtime.sendMessage({ type: 'getStores' });
 
-    const response = await fetch(`${BACKEND_ENDPOINT}/api/extension/stores`, {
-      headers: {
-        'Authorization': `Bearer ${BACKEND_TOKEN}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    console.log(`[Diagnostic] ⏱️ Fetch завершён за ${(performance.now() - fetchStart).toFixed(0)} мс`);
-    console.log(`[Diagnostic] Ответ: ${response.status}`);
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    if (!response || !response.success) {
+      throw new Error(response?.error || 'Не удалось загрузить магазины');
     }
 
-    const jsonStart = performance.now();
-    const stores = await response.json();
-    console.log(`[Diagnostic] ⏱️ JSON парсинг за ${(performance.now() - jsonStart).toFixed(0)} мс`);
-    console.log(`[Diagnostic] Получено магазинов: ${stores.length}`);
-    console.log('[Diagnostic] Пример ответа API (первый магазин):', stores[0]);
+    const stores = response.data;
+    console.log(`[Diagnostic] Получено магазинов: ${stores.length} за ${(performance.now() - startTime).toFixed(0)} мс`);
 
     // Заполняем дропдаун
     storeSelect.innerHTML = '<option value="">-- Выберите магазин --</option>';

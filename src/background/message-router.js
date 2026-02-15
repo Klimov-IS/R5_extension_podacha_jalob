@@ -11,6 +11,7 @@ import { ReportsHandler } from './handlers/reports-handler.js';
 import { ReviewsHandler } from './handlers/reviews-handler.js';
 import { SettingsHandler } from './handlers/settings-handler.js';
 import { StatusSyncHandler } from './handlers/status-sync-handler.js';
+import { storeManager } from '../services/store-manager.js';
 
 /**
  * Роутер сообщений
@@ -119,6 +120,16 @@ class MessageRouter {
         case 'getReviewStatuses':
           const statuses = await this.handlers.statusSync.getStatuses(message);
           sendResponse(statuses);
+          break;
+
+        // === STORES ===
+        case 'getStores':
+          try {
+            const stores = await storeManager.loadStores(message.forceRefresh || false);
+            sendResponse({ success: true, data: stores });
+          } catch (storeErr) {
+            sendResponse({ success: false, error: storeErr.message });
+          }
           break;
 
         // === ПЕРЕСЫЛКА СООБЩЕНИЙ В POPUP ===
