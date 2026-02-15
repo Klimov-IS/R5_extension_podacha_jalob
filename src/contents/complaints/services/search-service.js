@@ -39,11 +39,10 @@
         return found;
       }
 
-      const rows = Array.from(table.children);
-      console.log(`[SearchService] Всего строк на странице: ${rows.length}`);
+      const childCount = table.children.length;
 
-      for (let i = 0; i < rows.length; i++) {
-        const row = rows[i];
+      for (let i = 0; i < childCount; i++) {
+        const row = table.children[i];
         if (!row) continue;
 
         // Получаем ключ отзыва из строки
@@ -58,11 +57,9 @@
         if (complaintsMap.has(key)) {
           const complaint = complaintsMap.get(key);
           found.push({ complaint, rowIndex: i });
-          console.log(`✅ [SearchService] Найден отзыв: ${key}`);
         }
       }
 
-      console.log(`[SearchService] Найдено отзывов: ${found.length} из ${complaintsMap.size} искомых`);
       return found;
     }
 
@@ -77,7 +74,6 @@
 
       for (const complaint of complaints) {
         if (!complaint.productId) {
-          console.warn(`⚠️ Жалоба без productId, пропускаем:`, complaint);
           continue;
         }
 
@@ -106,7 +102,6 @@
 
       for (const complaint of articleComplaints) {
         if (!complaint.reviewDate) {
-          console.warn(`⚠️ Жалоба без reviewDate, пропускаем:`, complaint);
           continue;
         }
 
@@ -117,13 +112,10 @@
           complaint.reviewDate
         );
 
-        console.log(`[SearchService] Created key: ${key}`, complaint);
-
         complaintsMap.set(key, complaint);
         remainingKeys.add(key);
       }
 
-      console.log(`[SearchService] Created ${complaintsMap.size} complaint keys`);
       return { complaintsMap, remainingKeys };
     }
   }

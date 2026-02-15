@@ -37,7 +37,6 @@ class MessageRouter {
       return true; // Асинхронный ответ (ВАЖНО для async handlers!)
     });
 
-    console.log('[MessageRouter] ✅ Роутер запущен');
   }
 
   /**
@@ -52,8 +51,6 @@ class MessageRouter {
 
       // Для обратной совместимости поддерживаем и type и action
       const messageType = type || action;
-
-      console.log('[MessageRouter] Маршрутизация сообщения:', messageType);
 
       // Роутинг по типу сообщения
       switch (messageType) {
@@ -165,7 +162,6 @@ class MessageRouter {
   forwardToPopup(message) {
     chrome.runtime.sendMessage(message).catch(() => {
       // Игнорируем ошибку если popup закрыт
-      console.log('[MessageRouter] Popup закрыт, сообщение не доставлено');
     });
   }
 }

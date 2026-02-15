@@ -24,11 +24,7 @@ class ExternalAPI {
 
     // Если External API не настроен - MOCK режим
     if (!config) {
-      console.warn('[ExternalAPI] API не настроен, используется MOCK режим');
       await this._mockDelay(1000);
-
-      console.log('[ExternalAPI] 🎭 MOCK: Отправка отзывов');
-      console.log('[ExternalAPI] 🎭 Отзывов:', data.reviews?.length || 0);
 
       return {
         success: true,
@@ -38,12 +34,6 @@ class ExternalAPI {
         }
       };
     }
-
-    // Реальная отправка
-    console.log('[ExternalAPI] Отправка отзывов:', {
-      url: config.url,
-      reviewsCount: data.reviews?.length || 0
-    });
 
     const url = `${config.url}/reviews`;
 
@@ -67,7 +57,6 @@ class ExternalAPI {
       }
 
       const result = await response.json();
-      console.log('[ExternalAPI] ✅ Отзывы отправлены:', result);
 
       return {
         success: true,
@@ -106,7 +95,6 @@ class ExternalAPI {
       }
 
       const result = await response.json();
-      console.log('[ExternalAPI] ✅ Подключение проверено:', result);
 
       return {
         success: true,

@@ -68,18 +68,14 @@ export class StatusSyncService {
     }
 
     if (!reviews || reviews.length === 0) {
-      console.warn('[StatusSync] ⚠️ Нет отзывов для синхронизации');
       return { success: true, data: { received: 0, created: 0, updated: 0 } };
     }
-
-    console.log(`[StatusSync] 📤 Начинаем синхронизацию ${reviews.length} отзывов для магазина ${storeId}`);
 
     // Преобразуем отзывы в формат API
     const formattedReviews = reviews.map(r => this._formatReviewForAPI(r));
 
     // Разбиваем на батчи
     const batches = this._splitIntoBatches(formattedReviews, this.BATCH_SIZE);
-    console.log(`[StatusSync] 📦 Разбито на ${batches.length} батч(ей)`);
 
     // Общая статистика
     const totalStats = {
@@ -92,7 +88,6 @@ export class StatusSyncService {
     // Отправляем батчи
     for (let i = 0; i < batches.length; i++) {
       const batch = batches[i];
-      console.log(`[StatusSync] 📤 Отправка батча ${i + 1}/${batches.length} (${batch.length} отзывов)...`);
 
       try {
         const result = await this._sendBatch(storeId, batch);
@@ -101,7 +96,6 @@ export class StatusSyncService {
           totalStats.received += result.data.received || 0;
           totalStats.created += result.data.created || 0;
           totalStats.updated += result.data.updated || 0;
-          console.log(`[StatusSync] ✅ Батч ${i + 1}: created=${result.data.created}, updated=${result.data.updated}`);
         } else {
           totalStats.errors += batch.length;
           console.error(`[StatusSync] ❌ Батч ${i + 1} ошибка:`, result.error);
@@ -116,8 +110,6 @@ export class StatusSyncService {
         await this._sleep(500);
       }
     }
-
-    console.log(`[StatusSync] 📊 Итого: received=${totalStats.received}, created=${totalStats.created}, updated=${totalStats.updated}, errors=${totalStats.errors}`);
 
     if (totalStats.errors > 0) {
       return {
@@ -141,8 +133,6 @@ export class StatusSyncService {
     const baseURL = await this._getBaseURL();
     const token = await this._getToken();
     const url = `${baseURL}${this.endpoint}`;
-
-    console.log(`[StatusSync] 🌐 URL: ${url}`);
 
     const payload = {
       storeId: storeId,

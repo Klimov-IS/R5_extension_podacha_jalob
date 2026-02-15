@@ -12,8 +12,6 @@
 
 'use strict';
 
-console.log('[MainWorldBundle] 🚀 Начинаем загрузку модулей в MAIN world...');
-
 // ========================================================================
 // ИМПОРТ ВСЕХ МОДУЛЕЙ
 // ========================================================================
@@ -40,7 +38,7 @@ import './handlers/optimized-handler.js';   // window.OptimizedHandler
 // УВЕДОМЛЕНИЕ О ГОТОВНОСТИ
 // ========================================================================
 
-console.log('[MainWorldBundle] ✅ Все модули загружены в MAIN world');
+console.log('[MainWorldBundle] Все модули загружены в MAIN world');
 
 // Отправляем событие что bundle готов к использованию
 // content.js (в ISOLATED world) будет слушать это событие
@@ -61,8 +59,6 @@ window.dispatchEvent(new CustomEvent('wb-content-bundle-ready', {
   }
 }));
 
-console.log('[MainWorldBundle] 📡 Событие wb-content-bundle-ready отправлено');
-
 // ========================================================================
 // BRIDGE: ISOLATED WORLD ↔ MAIN WORLD
 // ========================================================================
@@ -74,7 +70,6 @@ console.log('[MainWorldBundle] 📡 Событие wb-content-bundle-ready от�
  */
 window.addEventListener('wb-call-main-world', async (event) => {
   const { action, data, requestId } = event.detail;
-  console.log(`[MainWorld] Получена команда из ISOLATED world: ${action}`, data);
 
   try {
     if (action === 'processComplaintsFromAPI') {
@@ -100,44 +95,28 @@ window.addEventListener('wb-call-main-world', async (event) => {
       }));
     } else if (action === 'runDiagnostics') {
       // Запуск диагностики DOM элементов
-      console.log('[MainWorld] 🔍 Запуск диагностики...');
-
       const report = await window.OptimizedHandler.runDiagnostics();
-
-      console.log('[MainWorld] ✅ Диагностика завершена:', report.overallStatus);
 
       window.dispatchEvent(new CustomEvent('wb-main-world-response', {
         detail: { requestId, success: true, data: report }
       }));
     } else if (action === 'runExtendedDiagnostics') {
       // Расширенная диагностика (End-to-End тест)
-      console.log('[MainWorld] 🔬 Запуск расширенной диагностики...');
-
       const report = await window.OptimizedHandler.runExtendedDiagnostics();
-
-      console.log('[MainWorld] ✅ Расширенная диагностика завершена:', report.overallStatus);
 
       window.dispatchEvent(new CustomEvent('wb-main-world-response', {
         detail: { requestId, success: true, data: report }
       }));
     } else if (action === 'runTest3Diagnostics') {
       // Тест 3: Интеграция с Backend API
-      console.log('[MainWorld] 🧪 Запуск Теста 3 (интеграция с API)...');
-
       const report = await window.OptimizedHandler.runTest3Diagnostics(data);
-
-      console.log('[MainWorld] ✅ Тест 3 завершен:', report.overallStatus);
 
       window.dispatchEvent(new CustomEvent('wb-main-world-response', {
         detail: { requestId, success: true, data: report }
       }));
     } else if (action === 'runTest4Diagnostics') {
       // Тест 4: Полная интеграция с реальной подачей жалоб
-      console.log('[MainWorld] 🚀 Запуск Теста 4 (реальная подача жалоб)...');
-
       const report = await window.OptimizedHandler.runTest4Diagnostics(data);
-
-      console.log('[MainWorld] ✅ Тест 4 завершен:', report.overallStatus);
 
       window.dispatchEvent(new CustomEvent('wb-main-world-response', {
         detail: { requestId, success: true, data: report }
@@ -152,5 +131,3 @@ window.addEventListener('wb-call-main-world', async (event) => {
     }));
   }
 });
-
-console.log('[MainWorldBundle] 🌉 Bridge ISOLATED ↔ MAIN world установлен');

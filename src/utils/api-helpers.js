@@ -30,7 +30,7 @@
  */
 export function parseComplaintText(text) {
   if (!text || typeof text !== 'string') {
-    console.warn('[api-helpers] parseComplaintText: Invalid input', { text });
+    console.warn('[api-helpers] parseComplaintText: Invalid input, type:', typeof text);
     return null;
   }
 
@@ -40,7 +40,7 @@ export function parseComplaintText(text) {
     const match = text.match(/```json\s*\n([\s\S]*?)\n```/);
 
     if (!match || !match[1]) {
-      console.warn('[api-helpers] parseComplaintText: No JSON block found', { text });
+      console.warn('[api-helpers] parseComplaintText: No JSON block found');
       return null;
     }
 
@@ -50,7 +50,6 @@ export function parseComplaintText(text) {
     // Validate required fields
     if (!parsed.reasonId || !parsed.complaintText) {
       console.warn('[api-helpers] parseComplaintText: Missing required fields', {
-        parsed,
         hasReasonId: !!parsed.reasonId,
         hasComplaintText: !!parsed.complaintText
       });
@@ -63,10 +62,7 @@ export function parseComplaintText(text) {
       complaintText: parsed.complaintText
     };
   } catch (error) {
-    console.error('[api-helpers] parseComplaintText: Failed to parse', {
-      error: error.message,
-      text
-    });
+    console.error('[api-helpers] parseComplaintText: Failed to parse', error.message);
     return null;
   }
 }
@@ -144,7 +140,7 @@ export function formatDateForWB(isoDate) {
  */
 export function generateReviewKey(complaint) {
   if (!complaint || typeof complaint !== 'object') {
-    console.warn('[api-helpers] generateReviewKey: Invalid complaint object', { complaint });
+    console.warn('[api-helpers] generateReviewKey: Invalid complaint object');
     return null;
   }
 
@@ -155,8 +151,7 @@ export function generateReviewKey(complaint) {
     console.warn('[api-helpers] generateReviewKey: Missing required fields', {
       hasProductId: !!productId,
       hasRating: !!rating,
-      hasReviewDate: !!reviewDate,
-      complaint
+      hasReviewDate: !!reviewDate
     });
     return null;
   }
@@ -244,7 +239,7 @@ export function validateComplaint(complaint) {
  */
 export function processComplaints(complaints) {
   if (!Array.isArray(complaints)) {
-    console.warn('[api-helpers] processComplaints: Input is not an array', { complaints });
+    console.warn('[api-helpers] processComplaints: Input is not an array');
     return [];
   }
 
@@ -265,43 +260,44 @@ export function processComplaints(complaints) {
       // Format date for WB
       const reviewDateFormatted = formatDateForWB(reviewDate);
 
-      // Generate review key (используем нормализованное reviewDate)
+      // Generate review key (pass only needed fields, no spread copy)
       const reviewKey = generateReviewKey({
-        ...complaint,
-        reviewDate // Добавляем reviewDate если его нет
+        productId: complaint.productId,
+        rating: complaint.rating,
+        reviewDate
       });
 
-      // Validate (используем нормализованное reviewDate)
+      // Validate (pass only needed fields, no spread copy)
       const validation = validateComplaint({
-        ...complaint,
-        reviewDate // Добавляем reviewDate для валидации
+        id: complaint.id,
+        productId: complaint.productId,
+        rating: complaint.rating,
+        reviewDate,
+        complaintText: complaint.complaintText
       });
 
       if (!validation.valid) {
         console.warn(`[api-helpers] processComplaints: Invalid complaint at index ${index}`, {
           errors: validation.errors,
-          complaint
+          complaintId: complaint?.id
         });
       }
 
-      return {
-        ...complaint,
-        reviewDate, // Нормализованное поле
-        reviewDateFormatted,
-        complaintData,
-        reviewKey,
-        _validation: validation
-      };
+      // Mutate original object — avoid spread copies (memory optimization)
+      complaint.reviewDate = reviewDate;
+      complaint.reviewDateFormatted = reviewDateFormatted;
+      complaint.complaintData = complaintData;
+      complaint.reviewKey = reviewKey;
+
+      return complaint;
     } catch (error) {
-      console.error(`[api-helpers] processComplaints: Failed to process complaint at index ${index}`, {
+      console.error(`[api-helpers] processComplaints: Failed at index ${index}`, {
         error: error.message,
-        complaint
+        complaintId: complaint?.id
       });
 
-      return {
-        ...complaint,
-        _error: error.message
-      };
+      complaint._error = error.message;
+      return complaint;
     }
   });
 }

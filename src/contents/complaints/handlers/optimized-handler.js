@@ -22,19 +22,13 @@ class OptimizedHandler {
      * @param {Object} request - запрос от complaints-page.js
      */
     static async handle(request) {
-      console.log("🎯 Получен запрос на обработку отфильтрованных жалоб (ОПТИМИЗИРОВАННЫЙ АЛГОРИТМ)");
-
       const complaints = request.complaints || [];
       const storeId = request.storeId;
       const selectedStars = request.stars || [1, 2];
       const articleStats = request.articleStats || {};
 
-      console.log(`📦 Получено ${complaints.length} жалоб для обработки`);
-      console.log(`⭐ Фильтр по звездам: ${selectedStars.join(', ')}`);
-
       // Проверяем поле поиска (СИНХРОННАЯ версия)
       const input = window.WBUtils.findSearchInputSync(false);
-      console.log('[OptimizedHandler] Поле поиска найдено:', input ? 'Да' : 'НЕТ', input?.className);
 
       if (!input) {
         console.error('[OptimizedHandler] ❌ Поле поиска не найдено!');
@@ -73,27 +67,21 @@ class OptimizedHandler {
         return;
       }
 
-      console.log(`\n🚀 Начинаем обработку ${complaintsMap.size} артикулов`);
       progressService.log("info", `🚀 Оптимизированная обработка: ${complaintsMap.size} артикулов, ${filteredCount} жалоб`);
 
       // Обрабатываем артикулы
       let articleIndex = 0;
       for (const [productId, articleComplaints] of complaintsMap) {
         if (window.stopProcessing) {
-          console.log("⏹️ Обработка остановлена");
           break;
         }
 
         articleIndex++;
-        console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-        console.log(`📦 Артикул ${articleIndex}/${complaintsMap.size}: ${productId}`);
-        console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 
         await this._processArticle(productId, articleComplaints, input, context);
 
         // Пауза между артикулами
         if (articleIndex < complaintsMap.size && !window.stopProcessing) {
-          console.log(`⏱️ Пауза 1.5с перед следующим артикулом...`);
           await window.WBUtils.sleep(1500);
         }
       }
@@ -112,6 +100,9 @@ class OptimizedHandler {
         }
       });
 
+      // Освобождаем память — данные уже отправлены
+      processedComplaints.length = 0;
+
       // Удаляем кнопку остановки
       const stopBtn = document.getElementById("stopButtonWB");
       if (stopBtn) stopBtn.remove();
@@ -128,21 +119,18 @@ class OptimizedHandler {
       for (const complaint of complaints) {
         // Фильтруем по рейтингу
         if (!selectedStars.includes(complaint.rating)) {
-          console.log(`⏭️ Пропускаем отзыв ${complaint.id} с рейтингом ${complaint.rating}`);
           progressService.incrementSkipped();
           continue;
         }
 
         // Проверяем наличие productId
         if (!complaint.productId) {
-          console.warn(`⚠️ Отзыв ${complaint.id} без productId, пропускаем`);
           progressService.incrementErrors();
           continue;
         }
 
         // Проверяем наличие reviewDate
         if (!complaint.reviewDate) {
-          console.warn(`⚠️ Отзыв ${complaint.id} без reviewDate, пропускаем`);
           progressService.incrementErrors();
           continue;
         }
@@ -163,7 +151,6 @@ class OptimizedHandler {
      * @private
      */
     static async _processArticle(productId, articleComplaints, input, context) {
-      console.log(`\n📦 Обрабатываем артикул ${productId}: ${articleComplaints.length} отзывов`);
       context.progressService.log("info", `📦 Артикул ${productId}: ${articleComplaints.length} отзывов для обработки`);
 
       // Вводим артикул в поиск
@@ -189,8 +176,6 @@ class OptimizedHandler {
 
       // Сканируем страницы
       while (remainingKeys.size > 0 && !window.stopProcessing) {
-        console.log(`📄 Страница ${pageNumber}: ищем ${remainingKeys.size} отзывов...`);
-
         // Сканируем текущую страницу (возвращает rowIndex вместо DOM-ссылок)
         const foundOnPage = window.SearchService.scanPageForReviews(complaintsMap, productId);
 
@@ -200,8 +185,6 @@ class OptimizedHandler {
           : document.querySelector('[class*="Base-table-body"]');
 
         if (foundOnPage.length > 0) {
-          console.log(`✅ Найдено ${foundOnPage.length} отзывов на странице ${pageNumber}`);
-
           // Обрабатываем все найденные отзывы
           for (const { complaint, rowIndex } of foundOnPage) {
             if (window.stopProcessing) break;
@@ -209,7 +192,6 @@ class OptimizedHandler {
             // Получаем строку по индексу в момент использования (не храним DOM-ссылку)
             const row = currentTable?.children[rowIndex];
             if (!row) {
-              console.warn(`⚠️ Строка ${rowIndex} не найдена в таблице, пропускаем`);
               context.progressService.incrementErrors();
               continue;
             }
@@ -243,8 +225,6 @@ class OptimizedHandler {
               await window.WBUtils.sleep(800);
             }
           }
-        } else {
-          console.log(`ℹ️ На странице ${pageNumber} не найдено нужных отзывов`);
         }
 
         totalPagesScanned++;
@@ -253,7 +233,6 @@ class OptimizedHandler {
         if (remainingKeys.size > 0) {
           const hasNext = await window.NavigationService.goToNextPage();
           if (!hasNext) {
-            console.warn(`⚠️ Достигли последней страницы, не найдено: ${remainingKeys.size} отзывов`);
             break;
           }
           pageNumber++;
@@ -262,14 +241,12 @@ class OptimizedHandler {
 
       // Ненайденные отзывы НЕ отмечаем в API
       if (remainingKeys.size > 0) {
-        console.warn(`⚠️ Не найдено ${remainingKeys.size} отзывов для артикула ${productId}`);
         context.progressService.log("warn", `⚠️ Артикул ${productId}: ${remainingKeys.size} отзывов не найдено на странице (останутся в очереди)`);
         for (const key of remainingKeys) {
           context.progressService.incrementErrors();
         }
       }
 
-      console.log(`📊 Артикул ${productId}: обработано ${foundOnArticle} из ${articleComplaints.length}, просканировано ${totalPagesScanned} страниц`);
     }
 
     /**
@@ -303,7 +280,6 @@ class OptimizedHandler {
         stopBtn.disabled = true;
         stopBtn.style.background = "#6c757d";
         stopBtn.style.cursor = "not-allowed";
-        console.log("⏹️ Пользователь остановил обработку");
       };
 
       document.body.appendChild(stopBtn);
@@ -321,8 +297,6 @@ class OptimizedHandler {
         overallStatus: null
       };
 
-      console.log('\n🔍 ========== ДИАГНОСТИКА DOM ЭЛЕМЕНТОВ ==========\n');
-
       // CHECK 1: Таблица отзывов
       const table = window.ElementFinder.findReviewsTable();
       report.checks.push({
@@ -331,7 +305,6 @@ class OptimizedHandler {
         element: table ? table.tagName : null,
         className: table ? table.className : null
       });
-      console.log(`CHECK 1: Таблица отзывов - ${table ? '✅ Найдена' : '❌ НЕ найдена'}`);
 
       if (!table) {
         report.overallStatus = 'FAILED - таблица не найдена';
@@ -345,7 +318,6 @@ class OptimizedHandler {
         success: rows.length > 0,
         count: rows.length
       });
-      console.log(`CHECK 2: Строки отзывов - ${rows.length > 0 ? '✅' : '❌'} (найдено ${rows.length})`);
 
       if (rows.length === 0) {
         report.overallStatus = 'FAILED - нет строк в таблице';
@@ -371,9 +343,6 @@ class OptimizedHandler {
           productId: testProductId
         }
       });
-      console.log(`CHECK 3: Парсинг данных - ${reviewDate && rating ? '✅' : '❌'}`);
-      console.log(`  - Дата: ${reviewDate || 'НЕ извлечена'}`);
-      console.log(`  - Рейтинг: ${rating || 'НЕ извлечен'}`);
 
       // CHECK 4: Кнопка троеточия (меню)
       const menuButton = window.ElementFinder.findMenuButton(firstRow);
@@ -383,7 +352,6 @@ class OptimizedHandler {
         element: menuButton ? menuButton.tagName : null,
         className: menuButton ? menuButton.className : null
       });
-      console.log(`CHECK 4: Кнопка меню - ${menuButton ? '✅ Найдена' : '❌ НЕ найдена'}`);
 
       if (!menuButton) {
         report.overallStatus = 'FAILED - кнопка меню не найдена';
@@ -398,14 +366,12 @@ class OptimizedHandler {
           name: '5. Клик по кнопке меню выполнен',
           success: true
         });
-        console.log(`CHECK 5: Клик по меню - ✅ Выполнен`);
       } catch (error) {
         report.checks.push({
           name: '5. Клик по кнопке меню',
           success: false,
           error: error.message
         });
-        console.log(`CHECK 5: Клик по меню - ❌ Ошибка: ${error.message}`);
         report.overallStatus = 'FAILED - не удалось кликнуть по меню';
         return report;
       }
@@ -416,7 +382,6 @@ class OptimizedHandler {
       for (let attempt = 0; attempt < 3; attempt++) {
         dropdown = window.ElementFinder.findOpenDropdown();
         if (dropdown) break;
-        console.log(`CHECK 6: Попытка ${attempt + 1}/3 найти dropdown...`);
         await window.WBUtils.sleep(300);
       }
       report.checks.push({
@@ -425,7 +390,6 @@ class OptimizedHandler {
         element: dropdown ? dropdown.tagName : null,
         className: dropdown ? dropdown.className : null
       });
-      console.log(`CHECK 6: Dropdown меню - ${dropdown ? '✅ Появилось' : '❌ НЕ появилось'}`);
 
       if (!dropdown) {
         report.overallStatus = 'FAILED - dropdown не появился';
@@ -440,7 +404,6 @@ class OptimizedHandler {
         element: complaintButton ? complaintButton.tagName : null,
         text: complaintButton ? complaintButton.textContent : null
       });
-      console.log(`CHECK 7: Кнопка "Пожаловаться" - ${complaintButton ? '✅ Найдена' : '❌ НЕ найдена'}`);
 
       if (!complaintButton) {
         report.overallStatus = 'FAILED - кнопка "Пожаловаться" не найдена';
@@ -457,14 +420,12 @@ class OptimizedHandler {
           name: '8. Клик "Пожаловаться" выполнен',
           success: true
         });
-        console.log(`CHECK 8: Клик "Пожаловаться" - ✅ Выполнен`);
       } catch (error) {
         report.checks.push({
           name: '8. Клик "Пожаловаться"',
           success: false,
           error: error.message
         });
-        console.log(`CHECK 8: Клик "Пожаловаться" - ❌ Ошибка: ${error.message}`);
         report.overallStatus = 'FAILED - не удалось кликнуть "Пожаловаться"';
         return report;
       }
@@ -477,7 +438,6 @@ class OptimizedHandler {
         element: modal ? modal.tagName : null,
         className: modal ? modal.className : null
       });
-      console.log(`CHECK 9: Модальное окно - ${modal ? '✅ Открылось' : '❌ НЕ открылось'}`);
 
       if (!modal) {
         report.overallStatus = 'FAILED - модальное окно не открылось';
@@ -491,7 +451,6 @@ class OptimizedHandler {
         success: radioButtons.length > 0,
         count: radioButtons.length
       });
-      console.log(`CHECK 10: Radio buttons - ${radioButtons.length > 0 ? '✅' : '❌'} (найдено ${radioButtons.length})`);
 
       if (radioButtons.length === 0) {
         report.overallStatus = 'FAILED - radio buttons категории не найдены';
@@ -518,14 +477,12 @@ class OptimizedHandler {
             categoryName: categoryName
           }
         });
-        console.log(`CHECK 11: Категория выбрана - ✅ "${categoryName}" (id=${firstRadio.id})`);
       } catch (error) {
         report.checks.push({
           name: '11. Выбор категории',
           success: false,
           error: error.message
         });
-        console.log(`CHECK 11: Выбор категории - ❌ Ошибка: ${error.message}`);
         report.overallStatus = 'FAILED - не удалось выбрать категорию';
         return report;
       }
@@ -542,7 +499,6 @@ class OptimizedHandler {
         element: textField ? textField.tagName : null,
         id: textField ? textField.id : null
       });
-      console.log(`CHECK 12: Поле текста - ${textField ? '✅ Найдено' : '❌ НЕ найдено'}`);
 
       // CHECK 13: Кнопка "Отправить"
       const submitButton = window.ElementFinder.findSubmitButton();
@@ -552,7 +508,6 @@ class OptimizedHandler {
         element: submitButton ? submitButton.tagName : null,
         text: submitButton ? (submitButton.innerText || submitButton.textContent) : null
       });
-      console.log(`CHECK 13: Кнопка "Отправить" - ${submitButton ? '✅ Найдена' : '❌ НЕ найдена'}`);
 
       // Закрываем модалку
       try {
@@ -561,13 +516,12 @@ class OptimizedHandler {
                            document.querySelector('[class*="overlay"]');
         if (closeButton) {
           await window.WBUtils.clickElement(closeButton);
-          console.log('🔄 Модальное окно закрыто');
         } else {
           // Fallback: ESC key
           document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
         }
       } catch (e) {
-        console.warn('⚠️ Не удалось закрыть модалку:', e.message);
+        // ignore close error
       }
 
       // Финальный статус
@@ -575,9 +529,6 @@ class OptimizedHandler {
       report.overallStatus = allSuccess
         ? '✅ SUCCESS - все проверки пройдены'
         : '⚠️ PARTIAL - есть проблемы';
-
-      console.log(`\n🔍 ИТОГ: ${report.overallStatus}\n`);
-      console.log('========== ДИАГНОСТИКА ЗАВЕРШЕНА ==========\n');
 
       return report;
     }
@@ -608,22 +559,17 @@ class OptimizedHandler {
         overallStatus: null
       };
 
-      console.log('\n🔬 ========== РАСШИРЕННАЯ ДИАГНОСТИКА ==========\n');
-      console.log(`📋 Тест: артикул ${TEST_ARTICLE}, страница ${TEST_PAGE}\n`);
-
       // ═══════════════════════════════════════════════════════════════
       // ФАЗА 1: ПОИСК ПО АРТИКУЛУ
       // ═══════════════════════════════════════════════════════════════
 
       // CHECK 1: Поиск по артикулу
-      console.log(`CHECK 1: Поиск по артикулу ${TEST_ARTICLE}...`);
       try {
         const searchSuccess = await window.NavigationService.searchByArticle(TEST_ARTICLE);
         report.checks.push({
           name: `1. Поиск по артикулу ${TEST_ARTICLE}`,
           success: searchSuccess
         });
-        console.log(`CHECK 1: Поиск - ${searchSuccess ? '✅' : '❌'}`);
 
         if (!searchSuccess) {
           report.overallStatus = 'FAILED - не удалось выполнить поиск';
@@ -649,7 +595,6 @@ class OptimizedHandler {
         success: rows.length > 0,
         count: rows.length
       });
-      console.log(`CHECK 2: Результаты - ${rows.length > 0 ? '✅' : '❌'} (${rows.length} строк)`);
 
       if (rows.length === 0) {
         report.overallStatus = 'FAILED - нет результатов поиска';
@@ -661,7 +606,6 @@ class OptimizedHandler {
       // ═══════════════════════════════════════════════════════════════
 
       // CHECK 3: Переход на страницу 2
-      console.log(`CHECK 3: Переход на страницу ${TEST_PAGE}...`);
       let pageSuccess = true;
       for (let i = 1; i < TEST_PAGE; i++) {
         const nextSuccess = await window.NavigationService.goToNextPage();
@@ -674,7 +618,6 @@ class OptimizedHandler {
         name: `3. Переход на страницу ${TEST_PAGE}`,
         success: pageSuccess
       });
-      console.log(`CHECK 3: Пагинация - ${pageSuccess ? '✅' : '❌'}`);
 
       if (!pageSuccess) {
         report.overallStatus = 'FAILED - не удалось перейти на страницу 2';
@@ -713,7 +656,6 @@ class OptimizedHandler {
           hasText: !!reviewData.text
         } : null
       });
-      console.log(`CHECK 4: Парсинг данных - ${reviewData ? '✅' : '❌'}`);
 
       if (!reviewData) {
         report.overallStatus = 'FAILED - не удалось спарсить данные отзыва';
@@ -729,8 +671,6 @@ class OptimizedHandler {
         key: reviewData.key
       };
 
-      console.log('📋 Данные отзыва:', report.reviewData);
-
       // ═══════════════════════════════════════════════════════════════
       // ФАЗА 4: ОТКРЫТИЕ ФОРМЫ ЖАЛОБЫ
       // ═══════════════════════════════════════════════════════════════
@@ -741,7 +681,6 @@ class OptimizedHandler {
         name: '5. Кнопка троеточия найдена',
         success: !!menuButton
       });
-      console.log(`CHECK 5: Кнопка троеточия - ${menuButton ? '✅' : '❌'}`);
 
       if (!menuButton) {
         report.overallStatus = 'FAILED - кнопка меню не найдена';
@@ -757,7 +696,6 @@ class OptimizedHandler {
         name: '6. Dropdown открылся',
         success: !!dropdown
       });
-      console.log(`CHECK 6: Dropdown - ${dropdown ? '✅' : '❌'}`);
 
       if (!dropdown) {
         report.overallStatus = 'FAILED - dropdown не открылся';
@@ -770,7 +708,6 @@ class OptimizedHandler {
         name: '7. Кнопка "Пожаловаться" найдена',
         success: !!complaintButton
       });
-      console.log(`CHECK 7: Кнопка "Пожаловаться" - ${complaintButton ? '✅' : '❌'}`);
 
       if (!complaintButton) {
         window.ElementFinder.closeOpenDropdown();
@@ -787,7 +724,6 @@ class OptimizedHandler {
         name: '8. Модальное окно открылось',
         success: !!modal
       });
-      console.log(`CHECK 8: Модальное окно - ${modal ? '✅' : '❌'}`);
 
       if (!modal) {
         report.overallStatus = 'FAILED - модальное окно не открылось';
@@ -822,7 +758,6 @@ class OptimizedHandler {
         success: true,
         data: { categoryId: firstRadio.id, categoryName }
       });
-      console.log(`CHECK 9: Категория "${categoryName}" - ✅`);
 
       // CHECK 10: Текстовое поле
       let textField = modal.querySelector('textarea#explanation');
@@ -835,7 +770,6 @@ class OptimizedHandler {
         success: !!textField,
         id: textField?.id
       });
-      console.log(`CHECK 10: Текстовое поле - ${textField ? '✅' : '❌'}`);
 
       if (!textField) {
         report.overallStatus = 'FAILED - текстовое поле не найдено';
@@ -858,7 +792,6 @@ class OptimizedHandler {
           success: true,
           text: TEST_TEXT
         });
-        console.log(`CHECK 11: Текст вставлен - ✅`);
       } catch (error) {
         report.checks.push({
           name: '11. Вставка текста',
@@ -873,13 +806,11 @@ class OptimizedHandler {
         name: '12. Кнопка "Отправить" найдена (НЕ нажата)',
         success: !!submitButton
       });
-      console.log(`CHECK 12: Кнопка "Отправить" - ${submitButton ? '✅' : '❌'} (НЕ нажимаем!)`);
 
       // ═══════════════════════════════════════════════════════════════
       // ЗАВЕРШЕНИЕ: Закрываем модалку
       // ═══════════════════════════════════════════════════════════════
 
-      console.log('\n🔄 Закрываем модальное окно (БЕЗ отправки)...');
       try {
         const closeButton = modal.querySelector('[class*="close"]') ||
                            modal.querySelector('button[aria-label*="Закр"]');
@@ -888,9 +819,8 @@ class OptimizedHandler {
         } else {
           document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
         }
-        console.log('✅ Модалка закрыта');
       } catch (e) {
-        console.warn('⚠️ Не удалось закрыть модалку:', e.message);
+        // ignore close error
       }
 
       // Очищаем поиск
@@ -902,10 +832,6 @@ class OptimizedHandler {
       report.overallStatus = allSuccess
         ? '✅ SUCCESS - расширенный тест пройден'
         : '⚠️ PARTIAL - есть проблемы';
-
-      console.log(`\n🔬 ИТОГ: ${report.overallStatus}`);
-      console.log('📋 Данные найденного отзыва:', report.reviewData);
-      console.log('========== РАСШИРЕННАЯ ДИАГНОСТИКА ЗАВЕРШЕНА ==========\n');
 
       return report;
     }
@@ -956,17 +882,10 @@ class OptimizedHandler {
         overallStatus: null
       };
 
-      console.log('\n🧪 ========== ТЕСТ 3: ИНТЕГРАЦИЯ С API ==========\n');
-      console.log(`📥 Получено жалоб от API: ${complaints.length}`);
-
       if (complaints.length === 0) {
         report.overallStatus = 'FAILED - нет жалоб от API';
-        console.log('❌ Нет жалоб для теста');
         return report;
       }
-
-      // Без лимита - обрабатываем все жалобы
-      console.log(`📋 Обрабатываем все ${complaints.length} жалоб`);
 
       // Группируем по артикулам
       const groupedByArticle = new Map();
@@ -979,16 +898,11 @@ class OptimizedHandler {
       }
 
       report.uniqueArticles = groupedByArticle.size;
-      console.log(`📦 Уникальных артикулов: ${report.uniqueArticles}`);
 
       // Обрабатываем каждый артикул
       let articleIndex = 0;
       for (const [productId, articleComplaints] of groupedByArticle) {
         articleIndex++;
-        console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-        console.log(`📦 Артикул ${articleIndex}/${report.uniqueArticles}: ${productId}`);
-        console.log(`   Жалоб для поиска: ${articleComplaints.length}`);
-        console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 
         const articleResult = {
           productId,
@@ -1000,7 +914,6 @@ class OptimizedHandler {
         // Поиск по артикулу
         const searchSuccess = await window.NavigationService.searchByArticle(productId);
         if (!searchSuccess) {
-          console.warn(`⚠️ Не удалось выполнить поиск по артикулу ${productId}`);
           articleResult.notFound = articleComplaints.map(c => c.reviewKey);
           report.reviewsNotFound += articleComplaints.length;
           report.articleResults.push(articleResult);
@@ -1011,28 +924,18 @@ class OptimizedHandler {
         const remainingKeys = new Set(articleComplaints.map(c => this.normalizeReviewKey(c.reviewKey)));
         const complaintsMap = new Map(articleComplaints.map(c => [this.normalizeReviewKey(c.reviewKey), c]));
 
-        // Логируем коллизии ключей (если есть)
-        const uniqueKeysCount = remainingKeys.size;
-        if (uniqueKeysCount < articleComplaints.length) {
-          console.warn(`⚠️ Коллизия ключей: ${articleComplaints.length} жалоб → ${uniqueKeysCount} уникальных ключей`);
-        }
-
         let pageNumber = 1;
         const MAX_PAGES = 10; // Максимум страниц для поиска
 
         // Сканируем страницы
         while (remainingKeys.size > 0 && pageNumber <= MAX_PAGES) {
-          console.log(`📄 Страница ${pageNumber}: ищем ${remainingKeys.size} отзывов...`);
-
           // Получаем таблицу и строки
           const table = window.ElementFinder.findReviewsTable();
           if (!table) {
-            console.warn('⚠️ Таблица не найдена');
             break;
           }
 
           const rows = Array.from(table.querySelectorAll('[class*="table-row"]'));
-          console.log(`   Строк на странице: ${rows.length}`);
 
           // Сканируем строки
           for (const row of rows) {
@@ -1048,7 +951,6 @@ class OptimizedHandler {
             if (isMatch) {
               // Собираем статусы
               const statuses = reviewData.statuses || [];
-              console.log(`   ✅ ${normalizedPageKey} | [${statuses.join(', ')}]`);
 
               // Обновляем статистику
               for (const status of statuses) {
@@ -1093,7 +995,6 @@ class OptimizedHandler {
           if (remainingKeys.size > 0) {
             const hasNext = await window.NavigationService.goToNextPage();
             if (!hasNext) {
-              console.log(`⚠️ Достигнута последняя страница`);
               break;
             }
             pageNumber++;
@@ -1112,7 +1013,6 @@ class OptimizedHandler {
 
         // Пауза между артикулами
         if (articleIndex < report.uniqueArticles) {
-          console.log(`⏱️ Пауза 1 сек перед следующим артикулом...`);
           await window.WBUtils.sleep(1000);
         }
       }
@@ -1136,19 +1036,11 @@ class OptimizedHandler {
       }
 
       if (reviewsToSync.length > 0) {
-        console.log(`\n📤 Синхронизация ${reviewsToSync.length} статусов с Backend...`);
         // Примечание: storeId нужно передать в options.storeId
         const storeId = options.storeId || null;
         if (storeId) {
           const syncResult = await this.syncReviewStatuses(storeId, reviewsToSync);
           report.syncResult = syncResult;
-          if (syncResult?.success) {
-            console.log(`✅ Статусы синхронизированы: created=${syncResult.data?.created}, updated=${syncResult.data?.updated}`);
-          } else {
-            console.warn(`⚠️ Ошибка синхронизации: ${syncResult?.error || 'unknown'}`);
-          }
-        } else {
-          console.warn('⚠️ storeId не указан, синхронизация пропущена');
         }
       }
       // =========================================================
@@ -1161,25 +1053,6 @@ class OptimizedHandler {
       report.overallStatus = report.reviewsFound > 0
         ? `✅ SUCCESS - найдено ${report.reviewsFound}/${complaints.length} (${successRate}%)`
         : '❌ FAILED - ничего не найдено';
-
-      // Выводим итоговый отчёт
-      console.log('\n\n═══════════════════════════════════════════════════════════════');
-      console.log('              🧪 ТЕСТ 3: ИТОГОВЫЙ ОТЧЁТ');
-      console.log('═══════════════════════════════════════════════════════════════');
-      console.log(`📥 Жалоб получено от API:    ${report.complaintsReceived}`);
-      console.log(`📦 Уникальных артикулов:     ${report.uniqueArticles}`);
-      console.log(`✅ Отзывов найдено:          ${report.reviewsFound} / ${complaints.length} (${successRate}%)`);
-      console.log(`❌ Не найдено:               ${report.reviewsNotFound}`);
-      console.log('');
-      console.log('📊 Статусы найденных отзывов:');
-      for (const [status, count] of Object.entries(report.statusStats).sort((a, b) => b[1] - a[1])) {
-        const percent = ((count / report.reviewsFound) * 100).toFixed(1);
-        console.log(`   ${status}: ${count} (${percent}%)`);
-      }
-      console.log('');
-      console.log(`🎯 Можно подать жалобу:      ${report.canSubmitComplaint} (${((report.canSubmitComplaint / report.reviewsFound) * 100 || 0).toFixed(1)}%)`);
-      console.log(`📝 Уже обработаны:           ${report.alreadyProcessed} (${((report.alreadyProcessed / report.reviewsFound) * 100 || 0).toFixed(1)}%)`);
-      console.log('═══════════════════════════════════════════════════════════════\n');
 
       return report;
     }
@@ -1224,18 +1097,10 @@ class OptimizedHandler {
         totalReviewsSynced: 0
       };
 
-      console.log('\n🚀 ========== ТЕСТ 4: ФИНАЛЬНЫЙ ИНТЕГРАЦИОННЫЙ ТЕСТ ==========\n');
-      console.log(`📥 Получено жалоб от API: ${complaints.length}`);
-      console.log(`🏪 Store ID: ${storeId}`);
-
       if (complaints.length === 0) {
         report.overallStatus = 'FAILED - нет жалоб от API';
-        console.log('❌ Нет жалоб для теста');
         return report;
       }
-
-      // Без лимита - обрабатываем все жалобы
-      console.log(`📋 Обрабатываем все ${complaints.length} жалоб`);
 
       // Группируем по артикулам
       const groupedByArticle = new Map();
@@ -1248,13 +1113,12 @@ class OptimizedHandler {
       }
 
       report.uniqueArticles = groupedByArticle.size;
-      console.log(`📦 Уникальных артикулов: ${report.uniqueArticles}`);
 
       // Создаем контекст для ComplaintService
       const context = {
         storeId,
         progressService: {
-          log: (type, msg) => console.log(`[${type.toUpperCase()}] ${msg}`),
+          log: () => {},
           incrementSent: () => report.submitted++,
           incrementSkipped: () => report.skipped++,
           incrementErrors: () => report.errors++,
@@ -1268,15 +1132,10 @@ class OptimizedHandler {
       let articleIndex = 0;
       for (const [productId, articleComplaints] of groupedByArticle) {
         if (window.stopProcessing || report.cancelled) {
-          console.log('⏹️ Обработка остановлена');
           break;
         }
 
         articleIndex++;
-        console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-        console.log(`📦 Артикул ${articleIndex}/${report.uniqueArticles}: ${productId}`);
-        console.log(`   Жалоб для поиска: ${articleComplaints.length}`);
-        console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 
         const articleResult = {
           productId,
@@ -1290,7 +1149,6 @@ class OptimizedHandler {
         // Поиск по артикулу
         const searchSuccess = await window.NavigationService.searchByArticle(productId);
         if (!searchSuccess) {
-          console.warn(`⚠️ Не удалось выполнить поиск по артикулу ${productId}`);
           articleResult.notFound = articleComplaints.map(c => c.reviewKey);
           report.reviewsNotFound += articleComplaints.length;
           report.articleResults.push(articleResult);
@@ -1310,17 +1168,12 @@ class OptimizedHandler {
         // TODO: Убрать после полного парсинга всех клиентов WB
         // ========================================
         while (pageNumber <= MAX_PAGES && !window.stopProcessing && !report.cancelled) {
-          const pendingComplaints = remainingKeys.size;
-          console.log(`📄 Страница ${pageNumber}: парсим все отзывы${pendingComplaints > 0 ? `, ищем ${pendingComplaints} жалоб` : ''}...`);
-
           const table = window.ElementFinder.findReviewsTable();
           if (!table) {
-            console.warn('⚠️ Таблица не найдена');
             break;
           }
 
           const rows = Array.from(table.querySelectorAll('[class*="table-row"]'));
-          console.log(`   Строк на странице: ${rows.length}`);
 
           // Массив для отзывов текущей страницы (для фоновой синхронизации)
           const pageReviewsToSync = [];
@@ -1350,8 +1203,6 @@ class OptimizedHandler {
             if (remainingKeys.has(normalizedPageKey)) {
               const complaint = complaintsMap.get(normalizedPageKey);
 
-              console.log(`   ✅ Найден: ${normalizedPageKey} | [${statuses.join(', ')}]`);
-
               // Обновляем статистику статусов
               for (const status of statuses) {
                 report.statusStats[status] = (report.statusStats[status] || 0) + 1;
@@ -1371,8 +1222,6 @@ class OptimizedHandler {
                 // МОЖНО подать жалобу
                 report.canSubmitComplaint++;
 
-                console.log(`   🎯 Можно подать жалобу!`);
-
                 // Создаем ComplaintService
                 const complaintService = new window.ComplaintService(context);
 
@@ -1385,17 +1234,13 @@ class OptimizedHandler {
                 );
 
                 if (result === 'CANCELLED') {
-                  console.log('⏹️ Пользователь отменил операцию');
                   report.cancelled = true;
                   break;
                 } else if (result === 'NEED_RELOAD') {
-                  console.log('🔄 Требуется перезагрузка страницы');
                   report.errors++;
                 } else if (result === true) {
-                  console.log(`   ✅ Жалоба #${report.submitted} подана успешно!`);
                   articleResult.submitted.push(normalizedPageKey);
                 } else {
-                  console.log(`   ❌ Не удалось подать жалобу`);
                   report.errors++;
                 }
 
@@ -1407,7 +1252,6 @@ class OptimizedHandler {
                 // Уже есть статус жалобы - пропускаем
                 report.alreadyProcessed++;
                 articleResult.skipped.push(normalizedPageKey);
-                console.log(`   ⏭️ Пропуск (уже обработан): ${normalizedPageKey}`);
               }
 
               articleResult.found.push({
@@ -1430,15 +1274,8 @@ class OptimizedHandler {
             const reviewsCount = pageReviewsToSync.length;
             // Запускаем синхронизацию в фоне (не ждём завершения)
             this.syncReviewStatuses(storeId, pageReviewsToSync)
-              .then(syncResult => {
-                if (syncResult?.success) {
-                  console.log(`📤 [Страница ${pageNumber}] Синхронизировано ${reviewsCount} отзывов (ВСЕ со страницы): created=${syncResult.data?.created}, updated=${syncResult.data?.updated}`);
-                } else {
-                  console.warn(`⚠️ [Страница ${pageNumber}] Ошибка синхронизации: ${syncResult?.error || 'unknown'}`);
-                }
-              })
-              .catch(err => {
-                console.warn(`⚠️ [Страница ${pageNumber}] Ошибка синхронизации:`, err.message);
+              .catch(() => {
+                // sync error handled silently
               });
           }
 
@@ -1447,7 +1284,6 @@ class OptimizedHandler {
           if (!window.stopProcessing && !report.cancelled) {
             const hasNext = await window.NavigationService.goToNextPage();
             if (!hasNext) {
-              console.log(`✅ Достигнута последняя страница артикула ${productId}`);
               break;
             }
             pageNumber++;
@@ -1466,7 +1302,6 @@ class OptimizedHandler {
 
         // Пауза между артикулами
         if (articleIndex < report.uniqueArticles && !window.stopProcessing && !report.cancelled) {
-          console.log(`⏱️ Пауза 1.5 сек перед следующим артикулом...`);
           await window.WBUtils.sleep(1500);
         }
       }
@@ -1487,31 +1322,6 @@ class OptimizedHandler {
       } else {
         report.overallStatus = '❌ FAILED - не удалось подать жалобы';
       }
-
-      // Выводим итоговый отчёт
-      console.log('\n\n═══════════════════════════════════════════════════════════════');
-      console.log('              🚀 ТЕСТ 4: ИТОГОВЫЙ ОТЧЁТ');
-      console.log('═══════════════════════════════════════════════════════════════');
-      console.log(`📥 Жалоб получено от API:    ${report.complaintsReceived}`);
-      console.log(`📦 Уникальных артикулов:     ${report.uniqueArticles}`);
-      console.log(`✅ Отзывов найдено:          ${report.reviewsFound}`);
-      console.log(`❌ Не найдено:               ${report.reviewsNotFound}`);
-      console.log(`📤 Синхронизировано в БД:    ${report.totalReviewsSynced}`);
-      console.log('');
-      console.log(`🎯 Можно подать жалобу:      ${report.canSubmitComplaint}`);
-      console.log(`📝 Уже обработаны:           ${report.alreadyProcessed}`);
-      console.log('');
-      console.log(`✅ Подано жалоб:             ${report.submitted}`);
-      console.log(`⏭️ Пропущено:                ${report.skipped}`);
-      console.log(`❌ Ошибки:                   ${report.errors}`);
-      console.log('');
-      if (Object.keys(report.statusStats).length > 0) {
-        console.log('📊 Статусы найденных отзывов:');
-        for (const [status, count] of Object.entries(report.statusStats).sort((a, b) => b[1] - a[1])) {
-          console.log(`   ${status}: ${count}`);
-        }
-      }
-      console.log('═══════════════════════════════════════════════════════════════\n');
 
       return report;
     }
@@ -1546,11 +1356,8 @@ class OptimizedHandler {
       }
 
       if (!reviews || reviews.length === 0) {
-        console.warn('[StatusSync] ⚠️ Нет отзывов для синхронизации');
         return { success: true, data: { received: 0, created: 0, updated: 0 } };
       }
-
-      console.log(`[StatusSync] 📤 Отправка ${reviews.length} статусов в Backend...`);
 
       // Используем bridge через custom events (MAIN world → ISOLATED world → Background)
       const requestId = `sync_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -1560,7 +1367,7 @@ class OptimizedHandler {
           window.removeEventListener('wb-sync-response', responseHandler);
           console.error('[StatusSync] ❌ Таймаут ожидания ответа');
           resolve({ success: false, error: 'Таймаут ожидания ответа' });
-        }, 30000); // 30 секунд таймаут
+        }, 10000); // 10 секунд таймаут
 
         const responseHandler = (event) => {
           if (event.detail.requestId === requestId) {
@@ -1568,9 +1375,7 @@ class OptimizedHandler {
             window.removeEventListener('wb-sync-response', responseHandler);
 
             const response = event.detail.response;
-            if (response?.success) {
-              console.log(`[StatusSync] ✅ Синхронизировано: created=${response.data?.created}, updated=${response.data?.updated}`);
-            } else {
+            if (!response?.success) {
               console.error('[StatusSync] ❌ Ошибка синхронизации:', response?.error);
             }
 

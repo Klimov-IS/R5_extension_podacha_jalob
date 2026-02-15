@@ -17,20 +17,12 @@ export class ReportsHandler {
    * @returns {Promise<Object>} { data: Object } - Детальный отчет
    */
   async getAPIReport() {
-    console.log('[ReportsHandler] Запрос отчета API сессии');
-
     try {
       // Завершаем сессию перед генерацией отчета
       apiSessionTracker.endSession();
 
       // Генерируем отчет
       const report = apiSessionTracker.generateReport();
-
-      console.log('[ReportsHandler] ✅ Отчет сформирован:', {
-        batches: report.batches.length,
-        received: report.sessionInfo.totalReceived,
-        sent: report.sessionInfo.totalSent
-      });
 
       return { data: report };
 
@@ -45,11 +37,8 @@ export class ReportsHandler {
    * @returns {Promise<Object>} { success: boolean }
    */
   async resetAPISession() {
-    console.log('[ReportsHandler] Сброс API сессии');
-
     try {
       apiSessionTracker.reset();
-      console.log('[ReportsHandler] ✅ Сессия сброшена');
       return { success: true };
 
     } catch (err) {
@@ -63,11 +52,8 @@ export class ReportsHandler {
    * @returns {Promise<Object>} { data: Object }
    */
   async getSessionState() {
-    console.log('[ReportsHandler] Запрос состояния сессии');
-
     try {
       const state = apiSessionTracker.getCurrentState();
-      console.log('[ReportsHandler] ✅ Состояние:', state);
       return { data: state };
 
     } catch (err) {

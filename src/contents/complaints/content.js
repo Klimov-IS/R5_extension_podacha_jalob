@@ -15,7 +15,6 @@
 
 'use strict';
 
-console.log('[Complaints] 🔵 content.js начал загрузку в ISOLATED world');
 
 // ========================================================================
 // ИНЖЕКТ BUNDLE В MAIN WORLD
@@ -27,11 +26,8 @@ console.log('[Complaints] 🔵 content.js начал загрузку в ISOLATE
  */
 function injectMainWorldBundle() {
   return new Promise((resolve, reject) => {
-    console.log('[Complaints] 📦 Инжектим bundle в MAIN world...');
-
     // Слушаем событие готовности bundle (отправляется из main-world-entry.js)
     window.addEventListener('wb-content-bundle-ready', (event) => {
-      console.log('[Complaints] ✅ Bundle готов в MAIN world:', event.detail);
       resolve(event.detail);
     }, { once: true });
 
@@ -51,7 +47,6 @@ function injectMainWorldBundle() {
     // Удаляем script тег после загрузки (код уже выполнен и остался в памяти)
     script.onload = () => {
       script.remove();
-      console.log('[Complaints] 📦 Bundle script тег удален (код остался в памяти)');
     };
 
     // Timeout на случай если событие не придет
@@ -68,15 +63,12 @@ function injectMainWorldBundle() {
 (async function initContentScript() {
   // Защита от повторного выполнения скрипта
   if (window.hasListenerAdded) {
-    console.log('[Complaints] ℹ️ Скрипт уже был загружен ранее');
     return;
   }
 
   try {
     // 1. Инжектим bundle в MAIN world
     const bundleInfo = await injectMainWorldBundle();
-    console.log('[Complaints] ✅ Bundle успешно загружен. Модули:', bundleInfo.modules.join(', '));
-
     // 2. Регистрируем message listener в ISOLATED world
     // ВАЖНО: НЕ используем async callback - это ломает sendResponse в Chrome Extensions!
     // Вместо этого используем IIFE для асинхронного кода
@@ -85,7 +77,6 @@ function injectMainWorldBundle() {
       // ============ PING HANDLER ============
       // Проверка готовности content script (синхронный)
       if (request.type === "ping") {
-        console.log("[Complaints] Получен ping, отвечаем pong");
         sendResponse({ status: "ready", bundleVersion: bundleInfo.version });
         return true;
       }
@@ -94,7 +85,6 @@ function injectMainWorldBundle() {
       // Новый оптимизированный обработчик с модульной архитектурой
       // Использует: DataExtractor, SearchService, NavigationService, ComplaintService
       if (request.type === "processComplaintsFromAPI") {
-        console.log("[Complaints] 🚀 Запуск оптимизированного обработчика...");
 
         // IIFE для асинхронного кода
         (async () => {
@@ -133,12 +123,9 @@ function injectMainWorldBundle() {
             }
           }));
 
-          console.log("[Complaints] 📤 Команда отправлена в MAIN world, requestId:", requestId);
-
           // Ждем ответа
           try {
             await responsePromise;
-            console.log("[Complaints] ✅ Обработка завершена в MAIN world");
             sendResponse({ success: true });
           } catch (error) {
             console.error("[Complaints] ❌ Ошибка в MAIN world:", error);
@@ -152,14 +139,11 @@ function injectMainWorldBundle() {
       // ============ LEGACY HANDLER ============
       // Старый обработчик для обратной совместимости
       if (request.type === "searchParametrs") {
-        console.log("[Complaints] ⚠️ Запуск legacy обработчика (устаревший)...");
-        console.warn("[Complaints] Legacy handler запрещен в Phase 3. Используйте 'processComplaintsFromAPI'");
         return;
       }
 
       // ============ DIAGNOSTIC TEST ============
       if (request.type === "diagnosticTest") {
-        console.log("[Complaints] 🔍 Запуск диагностики DOM элементов...");
 
         // IIFE для асинхронного кода
         (async () => {
@@ -196,11 +180,8 @@ function injectMainWorldBundle() {
             }
           }));
 
-          console.log("[Complaints] 📤 Диагностическая команда отправлена в MAIN world, requestId:", requestId);
-
           try {
             const report = await responsePromise;
-            console.log("[Complaints] ✅ Диагностика завершена");
             sendResponse({ success: true, report: report });
           } catch (error) {
             console.error("[Complaints] ❌ Ошибка диагностики:", error);
@@ -213,7 +194,6 @@ function injectMainWorldBundle() {
 
       // ============ EXTENDED DIAGNOSTIC TEST ============
       if (request.type === "extendedDiagnosticTest") {
-        console.log("[Complaints] 🔬 Запуск расширенной диагностики...");
 
         // IIFE для асинхронного кода
         (async () => {
@@ -249,11 +229,8 @@ function injectMainWorldBundle() {
             }
           }));
 
-          console.log("[Complaints] 📤 Расширенная диагностика отправлена в MAIN world, requestId:", requestId);
-
           try {
             const report = await responsePromise;
-            console.log("[Complaints] ✅ Расширенная диагностика завершена");
             sendResponse({ success: true, report: report });
           } catch (error) {
             console.error("[Complaints] ❌ Ошибка расширенной диагностики:", error);
@@ -266,11 +243,8 @@ function injectMainWorldBundle() {
 
       // ============ TEST 3: INTEGRATION WITH API ============
       if (request.type === "test3Diagnostics") {
-        console.log("[Complaints] 🧪 Запуск Теста 3 (интеграция с API)...");
-
         // Получаем жалобы от API
         const complaints = request.complaints || [];
-        console.log(`[Complaints] 📥 Получено ${complaints.length} жалоб для теста`);
 
         if (complaints.length === 0) {
           sendResponse({ success: false, error: 'Нет жалоб для теста' });
@@ -282,10 +256,6 @@ function injectMainWorldBundle() {
           const requestId = `test3_${Date.now()}`;
 
           const responsePromise = new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-              reject(new Error('Timeout waiting for Test 3 response'));
-            }, 600000); // 10 минут для полного теста с 50 жалобами
-
             const responseHandler = (event) => {
               if (event.detail.requestId === requestId) {
                 clearTimeout(timeout);
@@ -298,6 +268,11 @@ function injectMainWorldBundle() {
                 }
               }
             };
+
+            const timeout = setTimeout(() => {
+              window.removeEventListener('wb-main-world-response', responseHandler);
+              reject(new Error('Timeout waiting for Test 3 response'));
+            }, 300000); // 5 минут
 
             window.addEventListener('wb-main-world-response', responseHandler);
           });
@@ -311,11 +286,11 @@ function injectMainWorldBundle() {
             }
           }));
 
-          console.log("[Complaints] 📤 Тест 3 отправлен в MAIN world, requestId:", requestId);
+          // Allow GC of complaints array in isolated world (data already passed to MAIN world)
+          request.complaints = null;
 
           try {
             const report = await responsePromise;
-            console.log("[Complaints] ✅ Тест 3 завершен");
             sendResponse({ success: true, report: report });
           } catch (error) {
             console.error("[Complaints] ❌ Ошибка Теста 3:", error);
@@ -328,11 +303,8 @@ function injectMainWorldBundle() {
 
       // ============ TEST 4: FULL INTEGRATION WITH REAL SUBMISSION ============
       if (request.type === "test4Diagnostics") {
-        console.log("[Complaints] 🚀 Запуск Теста 4 (реальная подача жалоб)...");
-
         const complaints = request.complaints || [];
         const storeId = request.storeId || null;
-        console.log(`[Complaints] 📥 Получено ${complaints.length} жалоб, storeId: ${storeId}`);
 
         if (complaints.length === 0) {
           sendResponse({ success: false, error: 'Нет жалоб для теста' });
@@ -344,10 +316,6 @@ function injectMainWorldBundle() {
           const requestId = `test4_${Date.now()}`;
 
           const responsePromise = new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-              reject(new Error('Timeout waiting for Test 4 response'));
-            }, 1800000); // 30 минут для полного теста с реальной подачей
-
             const responseHandler = (event) => {
               if (event.detail.requestId === requestId) {
                 clearTimeout(timeout);
@@ -361,6 +329,11 @@ function injectMainWorldBundle() {
               }
             };
 
+            const timeout = setTimeout(() => {
+              window.removeEventListener('wb-main-world-response', responseHandler);
+              reject(new Error('Timeout waiting for Test 4 response'));
+            }, 300000); // 5 минут
+
             window.addEventListener('wb-main-world-response', responseHandler);
           });
 
@@ -373,11 +346,11 @@ function injectMainWorldBundle() {
             }
           }));
 
-          console.log("[Complaints] 📤 Тест 4 отправлен в MAIN world, requestId:", requestId);
+          // Allow GC of complaints array in isolated world (data already passed to MAIN world)
+          request.complaints = null;
 
           try {
             const report = await responsePromise;
-            console.log("[Complaints] ✅ Тест 4 завершен");
             sendResponse({ success: true, report: report });
           } catch (error) {
             console.error("[Complaints] ❌ Ошибка Теста 4:", error);
@@ -392,7 +365,6 @@ function injectMainWorldBundle() {
       console.warn("[Complaints] ⚠️ Неизвестный тип запроса:", request.type);
     });
 
-    console.log('[Complaints] ✅ Message listener успешно зарегистрирован');
 
     // ========================================================================
     // BRIDGE: MAIN WORLD → ISOLATED WORLD → BACKGROUND/POPUP
@@ -402,14 +374,11 @@ function injectMainWorldBundle() {
     window.addEventListener('wb-send-message', async (event) => {
       const { type, data } = event.detail;
 
-      console.log(`[Complaints] 📤 Перенаправление сообщения из MAIN world: ${type}`, data);
-
       try {
         await chrome.runtime.sendMessage({
           type: type,
           ...data
         });
-        console.log(`[Complaints] ✅ Сообщение отправлено: ${type}`);
       } catch (error) {
         console.error(`[Complaints] ❌ Ошибка отправки сообщения ${type}:`, error);
       }
@@ -423,16 +392,12 @@ function injectMainWorldBundle() {
     window.addEventListener('wb-sync-request', async (event) => {
       const { requestId, type, storeId, reviews } = event.detail;
 
-      console.log(`[Complaints] 📤 Sync request: ${type}, requestId: ${requestId}`);
-
       try {
         const response = await chrome.runtime.sendMessage({
           type: type,
           storeId: storeId,
           reviews: reviews
         });
-
-        console.log(`[Complaints] ✅ Sync response received:`, response);
 
         // Отправляем ответ обратно в MAIN world
         window.dispatchEvent(new CustomEvent('wb-sync-response', {
@@ -462,16 +427,12 @@ function injectMainWorldBundle() {
     window.addEventListener('wb-send-complaint-request', async (event) => {
       const { requestId, storeId, reviewId } = event.detail;
 
-      console.log(`[Complaints] 📤 SendComplaint request: storeId=${storeId}, reviewId=${reviewId}`);
-
       try {
         const response = await chrome.runtime.sendMessage({
           type: 'sendComplaint',
           storeId: storeId,
           reviewId: reviewId
         });
-
-        console.log(`[Complaints] ✅ SendComplaint response:`, response);
 
         // Отправляем ответ обратно в MAIN world
         window.dispatchEvent(new CustomEvent('wb-send-complaint-response', {
@@ -492,10 +453,6 @@ function injectMainWorldBundle() {
         }));
       }
     });
-
-    console.log('[Complaints] 🌉 Bridge для отправки сообщений установлен');
-    console.log('[Complaints] 🔄 Bridge для Status Sync установлен');
-    console.log('[Complaints] 📤 Bridge для SendComplaint установлен');
 
     window.hasListenerAdded = true;
     console.log('[Complaints] ✅ Content script полностью инициализирован');

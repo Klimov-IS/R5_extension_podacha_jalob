@@ -39,7 +39,6 @@ let currentStoreId = null;
 // ========================================================================
 
 document.addEventListener('DOMContentLoaded', async () => {
-  console.log('[Diagnostic] Страница загружена v3.0.0');
   await loadStores();
 });
 
@@ -48,7 +47,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 // ========================================================================
 
 async function loadStores() {
-  console.log('[Diagnostic] Загрузка магазинов...');
   const startTime = performance.now();
 
   try {
@@ -60,7 +58,6 @@ async function loadStores() {
     }
 
     const stores = response.data;
-    console.log(`[Diagnostic] Получено магазинов: ${stores.length} за ${(performance.now() - startTime).toFixed(0)} мс`);
 
     // Заполняем дропдаун
     storeSelect.innerHTML = '<option value="">-- Выберите магазин --</option>';
@@ -80,11 +77,7 @@ async function loadStores() {
       storeSelect.appendChild(option);
     });
 
-    console.log(`[Diagnostic] Активных магазинов: ${activeStores.length} из ${stores.length}`);
-
     storeSelect.disabled = false;
-    console.log(`[Diagnostic] ⏱️ ИТОГО загрузка магазинов: ${(performance.now() - startTime).toFixed(0)} мс`);
-    console.log('[Diagnostic] Магазины загружены');
 
   } catch (error) {
     console.error('[Diagnostic] Ошибка загрузки магазинов:', error);
@@ -110,8 +103,6 @@ storeSelect.addEventListener('change', () => {
     btnSubmit.disabled = true;
     loadedComplaints = [];
 
-    const selectedOption = storeSelect.options[storeSelect.selectedIndex];
-    console.log(`[Diagnostic] Выбран магазин: ${selectedOption.textContent} (${storeSelect.value})`);
   }
 });
 
@@ -133,7 +124,6 @@ async function getComplaints() {
 
   // Сохраняем выбранный магазин в storage для использования в API
   await chrome.storage.local.set({ currentStoreId: storeId });
-  console.log(`[Diagnostic] Store ID сохранён в storage: ${storeId}`);
 
   // Блокируем UI
   storeSelect.disabled = true;
@@ -143,8 +133,6 @@ async function getComplaints() {
   hideResults();
 
   try {
-    console.log(`[Diagnostic] Получение жалоб для магазина ${storeId}...`);
-
     const apiResponse = await chrome.runtime.sendMessage({
       type: 'getComplaints',
       storeId: storeId,
@@ -157,7 +145,6 @@ async function getComplaints() {
     }
 
     loadedComplaints = apiResponse.data || [];
-    console.log(`[Diagnostic] Получено ${loadedComplaints.length} жалоб`);
 
     if (loadedComplaints.length === 0) {
       throw new Error('Нет жалоб для обработки. Убедитесь что в системе есть жалобы со статусом "draft".');
@@ -170,8 +157,6 @@ async function getComplaints() {
 
     // Показываем превью
     showPreview(loadedComplaints);
-
-    console.log('[Diagnostic] Жалобы загружены, готово к подаче');
 
   } catch (error) {
     console.error('[Diagnostic] Ошибка:', error);
@@ -209,11 +194,8 @@ async function submitComplaints() {
   );
 
   if (!confirmed) {
-    console.log('[Diagnostic] Отменено пользователем');
     return;
   }
-
-  console.log('[Diagnostic] Запуск многораундовой подачи жалоб...');
 
   // Блокируем UI
   storeSelect.disabled = true;
@@ -239,7 +221,6 @@ async function submitComplaints() {
 
   try {
     // 1. Найти WB вкладку (один раз перед циклом)
-    console.log('[Diagnostic] Поиск WB вкладки...');
     const tabs = await chrome.tabs.query({});
     const wbTab = tabs.find(tab =>
       tab.url &&
@@ -251,7 +232,6 @@ async function submitComplaints() {
       throw new Error('Не найдена вкладка seller.wildberries.ru/feedbacks\n\nОткройте страницу отзывов WB и попробуйте снова.');
     }
 
-    console.log(`[Diagnostic] WB вкладка найдена: ${wbTab.id}`);
     updateProgress(5, 'Проверка content script...');
 
     // 2. Проверить content script (один раз перед циклом)
@@ -261,15 +241,12 @@ async function submitComplaints() {
       throw new Error('Content script не готов!\n\nОбновите страницу WB (F5) и попробуйте снова.');
     }
 
-    console.log('[Diagnostic] Content script готов');
-
     // ========================================================================
     // МНОГОРАУНДОВЫЙ ЦИКЛ
     // ========================================================================
     let round = 1;
 
     while (round <= MAX_ROUNDS) {
-      console.log(`[Diagnostic] ========== РАУНД ${round}/${MAX_ROUNDS} ==========`);
       updateProgress(10 + (round - 1) * 8, `Раунд ${round}/${MAX_ROUNDS}: Получение жалоб...`);
 
       // 3. Запросить жалобы от API
@@ -287,11 +264,9 @@ async function submitComplaints() {
       }
 
       const complaints = apiResponse.data || [];
-      console.log(`[Diagnostic] Раунд ${round}: получено ${complaints.length} жалоб`);
 
       // Условие выхода: 0 жалоб
       if (complaints.length === 0) {
-        console.log('[Diagnostic] Все жалобы обработаны (API вернул 0)');
         totalStats.overallStatus = 'SUCCESS: Все жалобы обработаны';
         break;
       }
@@ -312,7 +287,6 @@ async function submitComplaints() {
       }
 
       const roundReport = response.report;
-      console.log(`[Diagnostic] Раунд ${round} завершен:`, roundReport);
 
       // 5. Накопить статистику
       totalStats.rounds++;
@@ -331,7 +305,6 @@ async function submitComplaints() {
 
       // Если раунд был отменён
       if (roundReport.cancelled) {
-        console.log('[Diagnostic] Раунд отменён пользователем');
         totalStats.overallStatus = 'CANCELLED: Прервано пользователем';
         break;
       }
@@ -349,14 +322,7 @@ async function submitComplaints() {
     // Проверка на достижение лимита раундов
     if (round > MAX_ROUNDS && totalStats.overallStatus === 'COMPLETED') {
       totalStats.overallStatus = `WARNING: Достигнут лимит ${MAX_ROUNDS} раундов`;
-      console.warn(`[Diagnostic] Достигнут лимит раундов: ${MAX_ROUNDS}`);
     }
-
-    console.log('[Diagnostic] ========== ИТОГИ ==========');
-    console.log(`[Diagnostic] Всего раундов: ${totalStats.rounds}`);
-    console.log(`[Diagnostic] Жалоб получено: ${totalStats.complaintsReceived}`);
-    console.log(`[Diagnostic] Подано успешно: ${totalStats.submitted}`);
-    console.log(`[Diagnostic] Статус: ${totalStats.overallStatus}`);
 
     // 7. Показать итоговые результаты
     hideProgress();
@@ -472,8 +438,6 @@ function showPreview(complaints) {
 
   previewAccordion.innerHTML = html;
   previewCard.classList.add('active');
-
-  console.log(`[Diagnostic] Превью: ${Object.keys(byArticle).length} артикулов`);
 }
 
 // Обработчик клика по аккордеону (делегирование)
@@ -605,4 +569,3 @@ function displayResults(report) {
   resultsBody.innerHTML = html;
 }
 
-console.log('[Diagnostic] Модуль загружен (v3.0.0 - minimal UI)');

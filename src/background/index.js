@@ -8,9 +8,7 @@
 
 import { messageRouter } from './message-router.js';
 
-console.log('[Background] 🚀 Service Worker запускается...');
-
 // Запускаем роутер сообщений
 messageRouter.start();
 
-console.log('[Background] ✅ Service Worker готов');
+console.log('[Background] Service Worker готов');

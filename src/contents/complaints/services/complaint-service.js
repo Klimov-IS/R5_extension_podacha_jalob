@@ -19,12 +19,6 @@
   // ВАЖНО: Установить false для реальной отправки!
   const TEST_MODE = false;
 
-  if (TEST_MODE) {
-    console.warn('⚠️⚠️⚠️ TEST_MODE ВКЛЮЧЕН ⚠️⚠️⚠️');
-    console.warn('⚠️ Жалобы будут заполняться, но НЕ отправляться!');
-  } else {
-    console.log('[ComplaintService] ✅ Режим реальной отправки жалоб');
-  }
 
   /**
    * Сервис подачи жалоб
@@ -87,12 +81,11 @@
         }
 
         // Кликаем по кнопке жалобы
-        console.log("🖱️ Кликаем на 'Пожаловаться на отзыв'");
         complaintBtn.click();
 
         // Ждем модальное окно (1.8 сек - для медленного интернета)
         await window.WBUtils.sleep(1800);
-        const modal = window.ElementFinder.findComplaintModal();
+        let modal = window.ElementFinder.findComplaintModal();
 
         if (!modal) {
           this.progressService.log("error", `❌ Жалоба (арт. ${complaint.productId}): Модальное окно не появилось - ТРЕБУЕТСЯ ПЕРЕЗАГРУЗКА`);
@@ -101,13 +94,13 @@
         }
 
         // ============ ЗАПОЛНЕНИЕ ФОРМЫ ЖАЛОБЫ ============
-        console.log("✅ Модалка появилась");
         await window.WBUtils.sleep(400);
 
         // Парсим данные жалобы
         const complaintData = this._parseComplaintText(complaint.complaintText);
         if (!complaintData) {
           window.WBUtils.clearModalState(modal);
+          modal = null;
           return this._handleError(complaint, 'Ошибка парсинга complaintText', complaintStartTime);
         }
 
@@ -123,6 +116,7 @@
         const radioSelected = await this._selectReason(modal, reasonId, reasonName);
         if (!radioSelected) {
           window.WBUtils.clearModalState(modal);
+          modal = null;
           return this._handleError(complaint, 'Радиокнопки не найдены', complaintStartTime);
         }
 
@@ -130,6 +124,7 @@
         const textEntered = await this._enterComplaintText(complaintText);
         if (!textEntered) {
           window.WBUtils.clearModalState(modal);
+          modal = null;
           this.progressService.log("error", `❌ Жалоба (арт. ${complaint.productId}): Поле для текста не найдено - ТРЕБУЕТСЯ ПЕРЕЗАГРУЗКА`);
           return "NEED_RELOAD";
         }
@@ -138,17 +133,13 @@
         const sent = await this._submitForm();
         await window.WBUtils.sleep(500);
         window.WBUtils.clearModalState(modal);
+        modal = null;
 
         if (sent) {
           // Отмечаем в API как отправленную (draft → pending)
           // Используем bridge через CustomEvent (main world → isolated world → background)
-          console.log(`[ComplaintService] 📤 Вызываем sendComplaint API: storeId=${this.storeId}, reviewId=${complaint.id}`);
           try {
             const apiResponse = await this._sendComplaintViabridge(this.storeId, complaint.id);
-            console.log(`[ComplaintService] 📥 Ответ sendComplaint API:`, apiResponse);
-            if (apiResponse?.error) {
-              console.warn(`[ComplaintService] ⚠️ API вернул ошибку:`, apiResponse.error);
-            }
           } catch (apiErr) {
             console.error(`[ComplaintService] ❌ Ошибка вызова sendComplaint:`, apiErr);
           }
@@ -252,15 +243,12 @@
      * @private
      */
     async _handleAlreadyProcessed(complaint, startTime) {
-      console.warn(`⚠️ Отзыв ${complaint.id}: жалоба уже подана/отклонена, пропускаем`);
       this.progressService.log("warn", `⚠️ Жалоба (арт. ${complaint.productId}): уже подана или отклонена - пропускаем`);
 
       // Отмечаем в API как отправленную (draft → pending)
       // Используем bridge через CustomEvent (main world → isolated world → background)
-      console.log(`[ComplaintService] 📤 Вызываем sendComplaint API (skipped): storeId=${this.storeId}, reviewId=${complaint.id}`);
       try {
         const apiResponse = await this._sendComplaintViabridge(this.storeId, complaint.id);
-        console.log(`[ComplaintService] 📥 Ответ sendComplaint API (skipped):`, apiResponse);
       } catch (apiErr) {
         console.error(`[ComplaintService] ❌ Ошибка вызова sendComplaint (skipped):`, apiErr);
       }
@@ -313,7 +301,6 @@
       await window.WBUtils.sleep(100);
 
       // Клик
-      console.log("🖱️ Кликаем на кнопку меню...");
       menuButton.click();
       await window.WBUtils.sleep(300);
 
@@ -336,7 +323,6 @@
 
       while (!complaintBtn && attempts < 3) {
         attempts++;
-        console.warn(`⚠️ Меню не открылось, попытка ${attempts}/3...`);
         await window.WBUtils.sleep(500);
 
         menuButton.focus();
@@ -363,7 +349,6 @@
 
         // ✅ НОВЫЙ ФОРМАТ API: complaintText уже объект
         if (typeof text === 'object' && text !== null) {
-          console.log('[ComplaintService] Используем новый формат (объект)');
           return {
             reasonId: text.reasonId,
             reasonName: text.reasonName,
@@ -412,7 +397,6 @@
       let radio = modal.querySelector(`input[type="radio"][value="${reasonId}"]`);
 
       if (radio) {
-        console.log(`✅ Выбираем причину '${reasonName}'`);
         radio.click();
         radio.checked = true;
         radio.dispatchEvent(new Event("change", { bubbles: true }));
@@ -448,8 +432,6 @@
         return false;
       }
 
-      console.log(`[ComplaintService] 📝 Вставляем текст (${text.length} символов)...`);
-
       // ====== МЕТОД 1: execCommand('insertText') ======
       // Эмулирует реальный пользовательский ввод, React обновит свой state
       textarea.focus();
@@ -459,12 +441,9 @@
       const insertSuccess = document.execCommand('insertText', false, text);
 
       if (insertSuccess && textarea.value.length > 0) {
-        console.log(`[ComplaintService] ✅ execCommand('insertText') сработал (${textarea.value.length} символов)`);
         await window.WBUtils.sleep(300);
         return true;
       }
-
-      console.warn('[ComplaintService] ⚠️ execCommand не сработал, пробуем DataTransfer...');
 
       // ====== МЕТОД 2: DataTransfer (paste event) ======
       // Эмулируем вставку из буфера обмена
@@ -485,11 +464,8 @@
       await window.WBUtils.sleep(300);
 
       if (textarea.value.length > 0) {
-        console.log(`[ComplaintService] ✅ Paste event сработал (${textarea.value.length} символов)`);
         return true;
       }
-
-      console.warn('[ComplaintService] ⚠️ Paste не сработал, пробуем InputEvent...');
 
       // ====== МЕТОД 3: InputEvent с insertText ======
       textarea.focus();
@@ -511,7 +487,6 @@
       await window.WBUtils.sleep(500);
 
       if (textarea.value.length > 0) {
-        console.log(`[ComplaintService] ✅ InputEvent сработал (${textarea.value.length} символов)`);
         return true;
       }
 
@@ -530,15 +505,12 @@
       if (sendButton) {
         // ⚠️ ТЕСТОВЫЙ РЕЖИМ: Не отправляем форму, только имитируем
         if (TEST_MODE) {
-          console.warn('⚠️ TEST_MODE: Форма заполнена корректно, но кнопка "Отправить" НЕ нажата');
-          console.warn('⚠️ TEST_MODE: Имитируем успешную отправку для проверки воркфлоу');
           this.progressService.log("warn", `⚠️ TEST_MODE: Жалоба НЕ отправлена (тест)`);
           await window.WBUtils.sleep(1500);
           return true; // Имитируем успех
         }
 
         // Реальная отправка (в продакшене)
-        console.log("🖱️ Кликаем на кнопку 'Отправить'...");
         sendButton.click();
         await window.WBUtils.sleep(1500);
         return true;

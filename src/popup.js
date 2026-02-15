@@ -37,12 +37,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         active: true,
       });
 
-      console.log("[Popup] Diagnostic page opened");
     } catch (error) {
       console.error("[Popup] Error opening diagnostic page:", error);
       alert("Error: " + error.message);
     }
   });
 
-  console.log('[Popup] Extension ready');
 });

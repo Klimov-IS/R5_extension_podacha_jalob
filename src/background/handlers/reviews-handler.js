@@ -28,15 +28,9 @@ export class ReviewsHandler {
       return { success: false, error: 'Данные отзывов обязательны' };
     }
 
-    console.log('[ReviewsHandler] Отправка отзывов на External API:', {
-      reviewsCount: data.reviews.length,
-      stats: data.stats
-    });
-
     try {
       const result = await externalAPI.sendReviews(data);
 
-      console.log('[ReviewsHandler] ✅ Отзывы отправлены:', result);
       return result;
 
     } catch (err) {
@@ -53,11 +47,8 @@ export class ReviewsHandler {
    * @returns {Promise<Object>}
    */
   async testConnection() {
-    console.log('[ReviewsHandler] Тест подключения к External API');
-
     try {
       const result = await externalAPI.testConnection();
-      console.log('[ReviewsHandler] ✅ Тест подключения:', result);
       return { data: result };
 
     } catch (err) {

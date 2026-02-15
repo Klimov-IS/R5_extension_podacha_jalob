@@ -15,7 +15,6 @@ import { statusSyncService } from '../../services/status-sync-service.js';
  */
 export class StatusSyncHandler {
   constructor() {
-    console.log('[StatusSyncHandler] ✅ Инициализирован');
   }
 
   /**
@@ -28,8 +27,6 @@ export class StatusSyncHandler {
    */
   async syncStatuses(message) {
     const { storeId, reviews } = message;
-
-    console.log(`[StatusSyncHandler] 📤 Запрос на синхронизацию: storeId=${storeId}, reviews=${reviews?.length || 0}`);
 
     if (!storeId) {
       return {
@@ -47,7 +44,6 @@ export class StatusSyncHandler {
 
     try {
       const result = await statusSyncService.syncStatuses(storeId, reviews);
-      console.log(`[StatusSyncHandler] ✅ Синхронизация завершена:`, result);
       return result;
     } catch (error) {
       console.error(`[StatusSyncHandler] ❌ Ошибка синхронизации:`, error);
@@ -70,8 +66,6 @@ export class StatusSyncHandler {
   async getStatuses(message) {
     const { storeId, limit, canSubmit } = message;
 
-    console.log(`[StatusSyncHandler] 📥 Запрос статусов: storeId=${storeId}`);
-
     if (!storeId) {
       return {
         success: false,
@@ -81,7 +75,6 @@ export class StatusSyncHandler {
 
     try {
       const result = await statusSyncService.getStatuses(storeId, { limit, canSubmit });
-      console.log(`[StatusSyncHandler] ✅ Получено статусов:`, result.data?.total || 0);
       return result;
     } catch (error) {
       console.error(`[StatusSyncHandler] ❌ Ошибка получения статусов:`, error);

@@ -31,7 +31,7 @@ class APISessionTracker {
     this.batches = [];
     this.sentComplaints = [];
 
-    console.log('[APISessionTracker] Сессия сброшена');
+    // [APISessionTracker] Сессия сброшена');
   }
 
   /**
@@ -43,7 +43,7 @@ class APISessionTracker {
     this.session.storeId = storeId;
     this.session.startTime = new Date().toISOString();
 
-    console.log('[APISessionTracker] Сессия начата:', {
+    // [APISessionTracker] Сессия начата:', {
       storeId,
       startTime: this.session.startTime
     });
@@ -70,7 +70,7 @@ class APISessionTracker {
     this.batches.push(batch);
     this.session.totalReceived += count;
 
-    console.log('[APISessionTracker] Батч записан:', batch);
+    // [APISessionTracker] Батч записан:', batch);
   }
 
   /**
@@ -96,7 +96,7 @@ class APISessionTracker {
       this.session.failedCount++;
     }
 
-    console.log('[APISessionTracker] Жалоба записана:', record);
+    // [APISessionTracker] Жалоба записана:', record);
   }
 
   /**
@@ -105,7 +105,7 @@ class APISessionTracker {
   endSession() {
     this.session.endTime = new Date().toISOString();
 
-    console.log('[APISessionTracker] Сессия завершена:', {
+    // [APISessionTracker] Сессия завершена:', {
       duration: this.getSessionDuration(),
       totalReceived: this.session.totalReceived,
       totalSent: this.session.totalSent
@@ -165,7 +165,7 @@ class APISessionTracker {
       sentDetails: this.sentComplaints.slice(-50) // Последние 50 записей
     };
 
-    console.log('[APISessionTracker] Отчёт сгенерирован:', report.sessionInfo);
+    // [APISessionTracker] Отчёт сгенерирован:', report.sessionInfo);
 
     return report;
   }

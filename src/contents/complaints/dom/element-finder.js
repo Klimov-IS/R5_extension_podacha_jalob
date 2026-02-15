@@ -37,7 +37,6 @@
         const svg = btn.querySelector('svg');
         const viewBox = svg?.getAttribute('viewBox');
         if (viewBox && viewBox.includes('-10')) {
-          console.log('[ElementFinder] Found menu button via viewBox -10');
           return btn;
         }
       }
@@ -45,7 +44,6 @@
       // Способ 2: Ищем по классу More-button (кнопка "Ещё")
       const moreButton = row.querySelector('[class*="More-button__button"]');
       if (moreButton) {
-        console.log('[ElementFinder] Found menu button via More-button class');
         return moreButton;
       }
 
@@ -61,13 +59,11 @@
         for (const svg of svgButtons || []) {
           const viewBox = svg.getAttribute('viewBox');
           if (viewBox && viewBox.includes('-10')) {
-            console.log('[ElementFinder] Found menu button via cell search');
             return svg.closest('button');
           }
         }
       }
 
-      console.warn('[ElementFinder] Menu button not found in row');
       return null;
     }
 
@@ -89,14 +85,12 @@
       if (dropdownItem) {
         // Возвращаем родительский ul или сам item
         const parentList = dropdownItem.parentElement;
-        console.log('[ElementFinder] Found dropdown via Dropdown-list__item');
         return parentList || dropdownItem;
       }
 
       // Способ 2: По частичному классу Dropdown-list (ul контейнер)
       let dropdown = document.querySelector('ul[class*="Dropdown-list"], [class*="Dropdown-list"]:not(li)');
       if (dropdown) {
-        console.log('[ElementFinder] Found dropdown via Dropdown-list class');
         return dropdown;
       }
 
@@ -105,7 +99,6 @@
       if (optionBtn) {
         dropdown = optionBtn.closest('ul') || optionBtn.closest('[class*="Dropdown"]') || optionBtn.parentElement?.parentElement;
         if (dropdown) {
-          console.log('[ElementFinder] Found dropdown via Dropdown-option button');
           return dropdown;
         }
       }
@@ -113,7 +106,6 @@
       // Способ 4: По role
       dropdown = document.querySelector('[role="menu"], [role="listbox"]');
       if (dropdown) {
-        console.log('[ElementFinder] Found dropdown via role attribute');
         return dropdown;
       }
 
@@ -126,7 +118,6 @@
         const hasButtons = el.querySelectorAll('button').length > 0;
 
         if (isVisible && hasHighZIndex && hasButtons) {
-          console.log('[ElementFinder] Found dropdown via visible popup search');
           dropdown = el;
           break;
         }
@@ -156,7 +147,6 @@
       for (const button of allButtons) {
         const text = button.innerText || button.textContent;
         if (text && text.includes('Пожаловаться на отзыв')) {
-          console.log('[ElementFinder] Found complaint button via text "Пожаловаться на отзыв"');
           return button;
         }
       }
@@ -168,7 +158,6 @@
         for (const button of buttons) {
           const text = button.innerText || button.textContent;
           if (text && text.includes('Пожаловаться')) {
-            console.log('[ElementFinder] Found complaint button in dropdown');
             return button;
           }
         }
@@ -177,7 +166,6 @@
       // Способ 3 (Fallback): Ищем вторую кнопку с warning классом
       const warningButtons = document.querySelectorAll('button[class*="Dropdown-option--warning"]');
       if (warningButtons.length >= 2) {
-        console.log('[ElementFinder] Found complaint button as 2nd warning button');
         return warningButtons[1]; // Вторая кнопка - "Пожаловаться"
       }
 
@@ -191,7 +179,6 @@
       const dropdown = this.findOpenDropdown();
       if (dropdown) {
         document.body.click();
-        console.log("[ElementFinder] 🔄 Закрываем dropdown");
       }
     }
 
@@ -244,7 +231,6 @@
       if (buttonsContainer) {
         const btn = buttonsContainer.querySelector('button');
         if (btn) {
-          console.log('[ElementFinder] Found submit button in Complaint-form__buttons');
           return btn;
         }
       }
@@ -254,7 +240,6 @@
       for (const b of allButtons) {
         const text = b.innerText || b.textContent;
         if (text && (text.trim() === 'Отправить' || text.includes('Отправить'))) {
-          console.log('[ElementFinder] Found submit button via text');
           return b;
         }
       }
@@ -264,7 +249,6 @@
       if (modal) {
         const btn = modal.querySelector('button[type="submit"]');
         if (btn) {
-          console.log('[ElementFinder] Found submit button in modal');
           return btn;
         }
       }
@@ -272,7 +256,6 @@
       // Способ 4: По классу primary/main кнопки
       const btn = document.querySelector('[class*="button"][class*="m__"]');
       if (btn) {
-        console.log('[ElementFinder] Found submit button via class pattern');
         return btn;
       }
 

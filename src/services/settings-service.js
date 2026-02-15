@@ -24,7 +24,6 @@ class SettingsService {
   async getSettings(useCache = true) {
     // Проверяем кеш
     if (useCache && this.cache && Date.now() - this.cacheTime < this.CACHE_TTL) {
-      console.log('[SettingsService] Используем кешированные настройки');
       return this.cache;
     }
 
@@ -33,7 +32,6 @@ class SettingsService {
       this.cache = result.settings || null;
       this.cacheTime = Date.now();
 
-      console.log('[SettingsService] Настройки загружены из storage');
       return this.cache;
     } catch (error) {
       console.error('[SettingsService] ❌ Ошибка получения настроек:', error);
@@ -76,7 +74,6 @@ class SettingsService {
     const defaultEndpoint = 'http://158.160.217.236';
     const endpoint = settings?.backendEndpoint || defaultEndpoint;
 
-    console.log('[SettingsService] 🔍 getBackendEndpoint() вызван, возвращаем:', endpoint);
     return endpoint;
   }
 
@@ -89,7 +86,6 @@ class SettingsService {
     // 🔒 ХАРДКОД Backend Token для единственного пользователя (ВРЕМЕННОЕ РЕШЕНИЕ)
     // Актуальный токен получен от Backend команды 2026-01-29
     const HARDCODED_TOKEN = 'wbrm_0ab7137430d4fb62948db3a7d9b4b997';
-    console.log('[SettingsService] 🔍 getBackendToken() вызван, возвращаем:', HARDCODED_TOKEN);
     return HARDCODED_TOKEN;
 
     /* Старый код (закомментирован, так как используется хардкод):
@@ -173,7 +169,6 @@ class SettingsService {
     try {
       await chrome.storage.sync.set({ settings: newSettings });
       this.invalidateCache();
-      console.log('[SettingsService] ✅ Настройки сохранены');
     } catch (error) {
       console.error('[SettingsService] ❌ Ошибка сохранения настроек:', error);
       throw error;
@@ -197,7 +192,6 @@ class SettingsService {
   invalidateCache() {
     this.cache = null;
     this.cacheTime = null;
-    console.log('[SettingsService] Кеш сброшен');
   }
 
   /**
@@ -298,7 +292,6 @@ class SettingsService {
 
     try {
       await chrome.storage.local.set({ currentStoreId: storeId });
-      console.log(`[SettingsService] Current store ID saved: ${storeId}`);
     } catch (error) {
       console.error('[SettingsService] ❌ Ошибка сохранения currentStoreId:', error);
       throw error;
@@ -311,7 +304,6 @@ class SettingsService {
   async clearCurrentStoreId() {
     try {
       await chrome.storage.local.remove('currentStoreId');
-      console.log('[SettingsService] Current store ID cleared');
     } catch (error) {
       console.error('[SettingsService] ❌ Ошибка очистки currentStoreId:', error);
       throw error;

@@ -80,13 +80,10 @@
         for (const span of textSpans) {
           const text = span.textContent.trim();
           if (datePattern.test(text)) {
-            console.log('[DataExtractor] Found datetime text:', text);
-
             // Парсим WB формат в ISO 8601
             const isoDate = parseWBDatetime(text);
 
             if (isoDate) {
-              console.log('[DataExtractor] Parsed ISO datetime:', isoDate);
               return isoDate;
             }
           }
@@ -105,14 +102,12 @@
               const text = span.textContent.trim();
               if (/^\d{2}:\d{2}$/.test(text)) {
                 const fullDatetime = `${dateText} в ${text}`;
-                console.log('[DataExtractor] Fallback datetime:', fullDatetime);
                 return parseWBDatetime(fullDatetime);
               }
             }
           }
         }
 
-        console.warn('[DataExtractor] Datetime not found in row');
         return null;
 
       } catch (error) {
@@ -140,7 +135,6 @@
         const ratingContainer = row.querySelector('[class*="Rating__"]');
 
         if (!ratingContainer) {
-          console.warn('[DataExtractor] Rating container not found in row');
           return null;
         }
 
@@ -149,7 +143,6 @@
         let starsCount = activeStars.length;
 
         if (starsCount >= 1 && starsCount <= 5) {
-          console.log(`[DataExtractor] Extracted rating via active class: ${starsCount} stars`);
           return starsCount;
         }
 
@@ -165,11 +158,9 @@
         }
 
         if (orangeStarsCount >= 1 && orangeStarsCount <= 5) {
-          console.log(`[DataExtractor] Extracted rating via SVG fill: ${orangeStarsCount} stars`);
           return orangeStarsCount;
         }
 
-        console.warn(`[DataExtractor] Invalid rating count: activeStars=${starsCount}, svgOrange=${orangeStarsCount}`);
         return null;
       } catch (error) {
         console.error('[DataExtractor] Ошибка при извлечении рейтинга:', error);
@@ -298,10 +289,6 @@
           }
         }
 
-        if (statuses.length > 0) {
-          console.log('[DataExtractor] Found statuses:', statuses);
-        }
-
         return statuses;
 
       } catch (error) {
@@ -334,7 +321,6 @@
           if (text.includes('Отзыв оставили конкуренты')) continue;
 
           // Нашли текст отзыва
-          console.log('[DataExtractor] Found review text:', text.substring(0, 50) + '...');
           return text;
         }
 
@@ -373,15 +359,6 @@
       }
 
       const reviewKey = this.createReviewKey(currentArticle, rating, reviewDate);
-
-      console.log('[DataExtractor] Extracted review data:', {
-        productId: currentArticle,
-        rating,
-        reviewDate,
-        key: reviewKey,
-        text: text ? text.substring(0, 30) + '...' : null,
-        statuses
-      });
 
       return {
         productId: currentArticle,

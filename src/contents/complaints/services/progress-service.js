@@ -65,7 +65,6 @@
      * @param {string} message - сообщение
      */
     log(level, message) {
-      console.log(message);
 
       // MAIN world → ISOLATED world bridge
       window.dispatchEvent(new CustomEvent('wb-send-message', {

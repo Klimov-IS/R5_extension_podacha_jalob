@@ -27,11 +27,8 @@ class StoreManager {
   async loadStores(forceRefresh = false) {
     // Проверяем кеш
     if (!forceRefresh && this.cachedStores && Date.now() < this.cacheExpiry) {
-      console.log('[StoreManager] Returning cached stores');
       return this.cachedStores;
     }
-
-    console.log('[StoreManager] Fetching stores from backend...');
 
     try {
       // Получаем конфиг
@@ -63,15 +60,6 @@ class StoreManager {
       // Обновляем кеш
       this.cachedStores = stores;
       this.cacheExpiry = Date.now() + this.CACHE_TTL;
-
-      console.log(`[StoreManager] Loaded ${stores.length} stores (cached for ${this.CACHE_TTL / 1000}s)`);
-
-      // Логируем rate limit info
-      const rateLimitRemaining = response.headers.get('X-RateLimit-Remaining');
-      const rateLimitLimit = response.headers.get('X-RateLimit-Limit');
-      if (rateLimitRemaining && rateLimitLimit) {
-        console.log(`[StoreManager] Rate limit: ${rateLimitRemaining}/${rateLimitLimit}`);
-      }
 
       return stores;
 
@@ -120,7 +108,6 @@ class StoreManager {
   clearCache() {
     this.cachedStores = null;
     this.cacheExpiry = null;
-    console.log('[StoreManager] Cache cleared');
   }
 
   /**

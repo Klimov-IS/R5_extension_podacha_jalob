@@ -18,7 +18,6 @@
    */
   function setNativeValue(element, value) {
     if (!element) {
-      console.error('[setNativeValue] Element is null');
       return;
     }
 
@@ -52,10 +51,8 @@
 
       element.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
 
-      console.log(`[setNativeValue] ✅ Значение установлено (${value.length} символов)`);
     } else {
       // Fallback: прямое присвоение
-      console.warn('[setNativeValue] ⚠️ Setter не найден, используем прямое присвоение');
       element.value = value;
       element.dispatchEvent(new Event('input', { bubbles: true }));
       element.dispatchEvent(new Event('change', { bubbles: true }));
@@ -118,8 +115,6 @@
       throw new Error('Element is null or undefined');
     }
 
-    console.log('[clickElementForced] Кликаем на элемент:', element.tagName, element.className);
-
     // 1. Прокручиваем элемент в видимую область
     element.scrollIntoView({ behavior: 'instant', block: 'center' });
     await sleep(100);
@@ -158,8 +153,6 @@
 
     // 6. Нативный клик
     element.click();
-
-    console.log('[clickElementForced] Все события отправлены');
 
     // 7. Ждём после всех событий (даём React время показать меню)
     await sleep(pauseAfter);
@@ -226,7 +219,6 @@
 
       return null;
     } catch (error) {
-      console.error('Ошибка при получении ID из строки:', error);
       return null;
     }
   }
@@ -271,7 +263,6 @@
 
       return null;
     } catch (error) {
-      console.error('[WBUtils] Ошибка при извлечении даты отзыва:', error);
       return null;
     }
   }
@@ -315,7 +306,6 @@
 
       return null;
     } catch (error) {
-      console.error('[WBUtils] Ошибка при извлечении рейтинга:', error);
       return null;
     }
   }
@@ -351,26 +341,21 @@
    * @param {boolean} verbose - Выводить ли подробные логи
    */
   function findSearchInputSync(verbose = false) {
-    if (verbose) console.log('[WBUtils] Начинаем поиск поля ввода поиска...');
-
     // Способ 1: По placeholder
     let input = document.querySelector('input[placeholder*="Поиск"], input[placeholder*="поиск"]');
     if (input) {
-      if (verbose) console.log('[WBUtils] ✅ Найдено по placeholder:', input);
       return input;
     }
 
     // Способ 2: По type="search"
     input = document.querySelector('input[type="search"]');
     if (input) {
-      if (verbose) console.log('[WBUtils] ✅ Найдено по type=search:', input);
       return input;
     }
 
     // Способ 3: По классу с "search" или "Search"
     input = document.querySelector('input[class*="search" i], input[class*="Search"]');
     if (input) {
-      if (verbose) console.log('[WBUtils] ✅ Найдено по классу search:', input);
       return input;
     }
 
@@ -379,12 +364,10 @@
     for (const inp of textInputs) {
       const style = getComputedStyle(inp);
       if (style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0') {
-        if (verbose) console.log('[WBUtils] ✅ Найдено первое видимое поле text:', inp);
         return inp;
       }
     }
 
-    if (verbose) console.log('[WBUtils] ❌ Поле поиска НЕ найдено');
     return null;
   }
 
@@ -415,28 +398,12 @@
    * @returns {HTMLButtonElement|null} - кнопка "Следующая страница" или null
    */
   function findNextPageButton(verbose = false) {
-    if (verbose) console.log('[WBUtils] Ищем кнопку следующей страницы...');
-
     // Ищем все кнопки пагинации по классу Token-pagination__arrow
     const paginationButtons = document.querySelectorAll('[class*="Token-pagination__arrow"]');
 
-    if (verbose) {
-      console.log(`[WBUtils] Найдено ${paginationButtons.length} кнопок пагинации`);
-    }
-
     // Проверяем что найдены все 5 кнопок (WB добавил 5-ю кнопку 04.02.2026)
     if (paginationButtons.length < 5) {
-      if (verbose) console.log(`[WBUtils] ❌ Найдено ${paginationButtons.length} кнопок пагинации, ожидалось 5`);
       return null;
-    }
-
-    // Логируем все кнопки для диагностики
-    if (verbose) {
-      const buttonLabels = ['В начало ◀◀', 'Предыдущая ◀', '??? (новая)', 'Следующая ▶', 'В конец ▶▶'];
-      paginationButtons.forEach((btn, index) => {
-        const isDisabled = btn.disabled || btn.hasAttribute('disabled');
-        console.log(`[WBUtils] Кнопка [${index}] "${buttonLabels[index] || '?'}": disabled=${isDisabled}`);
-      });
     }
 
     // ✅ ФИКСИРОВАННАЯ ПОЗИЦИЯ: кнопка "Следующая" на индексе [3]
@@ -444,19 +411,7 @@
     const nextButton = paginationButtons[3];
 
     if (!nextButton) {
-      if (verbose) console.log('[WBUtils] ❌ Кнопка с индексом [3] не найдена');
       return null;
-    }
-
-    // Проверяем что кнопка НЕ disabled (если disabled - это последняя страница)
-    const isDisabled = nextButton.disabled || nextButton.hasAttribute('disabled');
-
-    if (verbose) {
-      if (isDisabled) {
-        console.log('[WBUtils] ⚠️ Кнопка "Следующая страница" [3] найдена, но disabled (последняя страница)');
-      } else {
-        console.log('[WBUtils] ✅ Кнопка "Следующая страница" [3] найдена и активна');
-      }
     }
 
     return nextButton;
@@ -509,12 +464,10 @@
         pauseButton.textContent = '▶️ Продолжить';
         pauseButton.style.background = '#28a745';
         pauseButton.style.color = '#fff';
-        console.log('⏸️ Обработка приостановлена');
       } else {
         pauseButton.textContent = '⏸ Пауза';
         pauseButton.style.background = '#ffc107';
         pauseButton.style.color = '#000';
-        console.log('▶️ Обработка возобновлена');
       }
     };
 

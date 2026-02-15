@@ -18,13 +18,9 @@ export class SettingsHandler {
    * @returns {Promise<Object>} { success: boolean }
    */
   async onSettingsUpdated(message) {
-    console.log('[SettingsHandler] Настройки обновлены, сбрасываем кеш');
-
     try {
       // Сбрасываем кеш настроек
       settingsService.invalidateCache();
-
-      console.log('[SettingsHandler] ✅ Кеш настроек сброшен');
       return { success: true };
 
     } catch (err) {
@@ -38,11 +34,8 @@ export class SettingsHandler {
    * @returns {Promise<Object>} { data: Object } или { error: string }
    */
   async getSettings() {
-    console.log('[SettingsHandler] Запрос текущих настроек');
-
     try {
       const settings = await settingsService.getSettings(false); // Без кеша
-      console.log('[SettingsHandler] ✅ Настройки получены');
       return { data: settings };
 
     } catch (err) {
@@ -56,11 +49,8 @@ export class SettingsHandler {
    * @returns {Promise<Object>} { data: Object }
    */
   async validateSettings() {
-    console.log('[SettingsHandler] Валидация настроек');
-
     try {
       const validation = await settingsService.validateSettings();
-      console.log('[SettingsHandler] ✅ Валидация завершена:', validation);
       return { data: validation };
 
     } catch (err) {

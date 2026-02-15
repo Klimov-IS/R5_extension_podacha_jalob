@@ -24,8 +24,6 @@ export class ComplaintsHandler {
   async getComplaints(message) {
     const { storeId, skip = 0, take = 100 } = message;
 
-    console.log('[ComplaintsHandler] Запрос жалоб:', { storeId, skip, take });
-
     try {
       const data = await pilotAPI.getComplaints(storeId, { skip, take });
 
@@ -40,7 +38,6 @@ export class ComplaintsHandler {
         apiSessionTracker.recordReceivedComplaints(batchNumber, skip, take, data);
       }
 
-      console.log('[ComplaintsHandler] ✅ Жалобы получены:', data?.length || 0);
       return { data };
 
     } catch (err) {
@@ -59,23 +56,17 @@ export class ComplaintsHandler {
   async sendComplaint(message) {
     const { storeId, reviewId } = message;
 
-    console.log('[ComplaintsHandler] 📥 Получен запрос sendComplaint:', { storeId, reviewId });
-
     if (!storeId || !reviewId) {
       console.error('[ComplaintsHandler] ❌ Недостаточно параметров:', { storeId, reviewId });
       return { error: 'storeId и reviewId обязательны' };
     }
 
-    console.log('[ComplaintsHandler] 🔄 Вызываем pilotAPI.markComplaintAsSent...');
-
     try {
       const data = await pilotAPI.markComplaintAsSent(storeId, reviewId);
-      console.log('[ComplaintsHandler] ✅ API ответ:', data);
 
       // Записываем успешную отправку в трекер
       apiSessionTracker.recordSentComplaint(reviewId, true, 200);
 
-      console.log('[ComplaintsHandler] ✅ Жалоба отправлена:', reviewId);
       return { data };
 
     } catch (err) {

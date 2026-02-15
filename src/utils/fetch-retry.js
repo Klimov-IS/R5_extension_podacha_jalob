@@ -36,38 +36,26 @@ export async function fetchWithRetry(url, options = {}, config = {}) {
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`[FetchRetry] Попытка ${attempt}/${maxRetries}: ${url}`);
-
       const response = await fetch(url, options);
 
-      // Если ответ OK - возвращаем его
       if (response.ok) {
-        console.log(`[FetchRetry] ✅ Успешный запрос на попытке ${attempt}`);
         return response;
       }
 
-      // Если shouldRetry возвращает true И это не последняя попытка
       if (shouldRetry(response) && attempt < maxRetries) {
-        const delay = Math.pow(2, attempt) * baseDelay; // Exponential backoff: 2s, 4s, 8s
-        console.warn(`[FetchRetry] ⚠️ HTTP ${response.status} на попытке ${attempt}. Повтор через ${delay}ms...`);
+        const delay = Math.pow(2, attempt) * baseDelay;
         await sleep(delay);
-        continue; // Пробуем еще раз
+        continue;
       }
 
       // Для других ошибок или последней попытки - возвращаем ответ как есть
       return response;
 
     } catch (err) {
-      console.error(`[FetchRetry] ❌ Ошибка на попытке ${attempt}:`, err);
-
-      // Если это последняя попытка - выбрасываем ошибку
       if (attempt === maxRetries) {
         throw err;
       }
-
-      // Иначе ждем и пробуем снова
       const delay = Math.pow(2, attempt) * baseDelay;
-      console.log(`[FetchRetry] Повтор через ${delay}ms...`);
       await sleep(delay);
     }
   }

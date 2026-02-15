@@ -32,12 +32,7 @@ class PilotAPI {
       this.token = await settingsService.getBackendToken();
       this.storeId = await settingsService.getBackendStoreId();
 
-      console.log('[PilotAPI] Инициализация завершена:', {
-        baseURL: this.baseURL,
-        storeId: this.storeId,
-        tokenLength: this.token?.length,
-        token: this.token // 🔍 DEBUG: показываем полный токен
-      });
+      // Initialization complete
     } catch (error) {
       console.error('[PilotAPI] ❌ Ошибка инициализации:', error);
       throw new Error(`API не настроен: ${error.message}`);
@@ -52,8 +47,6 @@ class PilotAPI {
    */
   async getStores() {
     await this.initialize();
-
-    console.warn('[PilotAPI] getStores() is deprecated. Token is tied to one store.');
 
     // Возвращаем "виртуальный" магазин для совместимости
     return [{
@@ -90,15 +83,6 @@ class PilotAPI {
     // Backend поддерживает: limit, filter, rating (НЕ skip/take)
     const url = `${this.baseURL}/api/extension/stores/${targetStoreId}/complaints?limit=${take}&filter=draft&rating=1,2,3`;
 
-    console.log(`[PilotAPI] Запрос жалоб:`, {
-      storeId: targetStoreId,
-      skip,
-      take,
-      url,
-      token: this.token, // 🔍 DEBUG: показываем токен перед запросом
-      authHeader: `Bearer ${this.token}` // 🔍 DEBUG: показываем полный заголовок
-    });
-
     const response = await fetchWithRetry(
       url,
       {
@@ -119,19 +103,9 @@ class PilotAPI {
     const rateLimitLimit = response.headers.get('X-RateLimit-Limit');
     const rateLimitReset = response.headers.get('X-RateLimit-Reset');
 
-    if (rateLimitRemaining) {
-      console.log(`[PilotAPI] Rate Limit: ${rateLimitRemaining}/${rateLimitLimit}, Reset: ${rateLimitReset}`);
-
-      if (parseInt(rateLimitRemaining) < 10) {
-        console.warn(`[PilotAPI] ⚠️ Rate limit warning: только ${rateLimitRemaining} запросов осталось`);
-      }
+    if (rateLimitRemaining && parseInt(rateLimitRemaining) < 10) {
+      console.warn(`[PilotAPI] Rate limit warning: ${rateLimitRemaining} запросов осталось`);
     }
-
-    console.log(`[PilotAPI] Ответ сервера:`, {
-      status: response.status,
-      statusText: response.statusText,
-      ok: response.ok
-    });
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => '');
@@ -155,20 +129,8 @@ class PilotAPI {
     // Извлекаем массив complaints
     const complaints = data.complaints || data; // Fallback на старый формат (массив)
 
-    console.log('[PilotAPI] ✅ Получено жалоб от API:', complaints?.length || 0);
-    console.log('[PilotAPI] 📊 Статистика:', {
-      total: data.total,
-      stats: data.stats
-    });
-
     // Обработка жалоб: парсинг complaintText, генерация reviewKey, форматирование дат
     const processed = processComplaints(complaints);
-
-    console.log('[PilotAPI] ✅ Жалобы обработаны:', {
-      total: processed.length,
-      withKeys: processed.filter(c => c.reviewKey).length,
-      withParsedData: processed.filter(c => c.complaintData).length
-    });
 
     return processed;
   }
@@ -196,13 +158,6 @@ class PilotAPI {
       duration: metadata.duration || 0
     };
 
-    console.log(`[PilotAPI] 📤 Отправка жалобы на API:`, {
-      storeId: targetStoreId,
-      reviewId,
-      url,
-      body
-    });
-
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -217,7 +172,6 @@ class PilotAPI {
 
       // Специальная обработка для идемпотентности (409 ALREADY_SENT)
       if (response.status === 409) {
-        console.warn(`[PilotAPI] ⚠️ Жалоба уже отправлена (идемпотентная операция):`, { reviewId });
         return {
           success: true,
           message: 'Complaint already sent',
@@ -246,7 +200,6 @@ class PilotAPI {
     }
 
     const data = await response.json();
-    console.log('[PilotAPI] ✅ Жалоба успешно отправлена:', { reviewId, data });
     return data;
   }
 
@@ -259,8 +212,6 @@ class PilotAPI {
 
     const url = `${this.baseURL}/api/health`;
 
-    console.log('[PilotAPI] 🏥 Health check:', url);
-
     const response = await fetch(url, {
       method: 'GET'
     });
@@ -270,7 +221,6 @@ class PilotAPI {
     }
 
     const health = await response.json();
-    console.log('[PilotAPI] ✅ Health check passed:', health);
     return health;
   }
 }
