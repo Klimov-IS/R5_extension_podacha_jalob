@@ -31,7 +31,7 @@ class APISessionTracker {
     this.batches = [];
     this.sentComplaints = [];
 
-    // [APISessionTracker] Сессия сброшена');
+    // Session reset
   }
 
   /**
@@ -43,10 +43,7 @@ class APISessionTracker {
     this.session.storeId = storeId;
     this.session.startTime = new Date().toISOString();
 
-    // [APISessionTracker] Сессия начата:', {
-      storeId,
-      startTime: this.session.startTime
-    });
+    // Session started
   }
 
   /**
@@ -70,7 +67,7 @@ class APISessionTracker {
     this.batches.push(batch);
     this.session.totalReceived += count;
 
-    // [APISessionTracker] Батч записан:', batch);
+    // Batch recorded
   }
 
   /**
@@ -96,7 +93,7 @@ class APISessionTracker {
       this.session.failedCount++;
     }
 
-    // [APISessionTracker] Жалоба записана:', record);
+    // Complaint recorded
   }
 
   /**
@@ -105,11 +102,7 @@ class APISessionTracker {
   endSession() {
     this.session.endTime = new Date().toISOString();
 
-    // [APISessionTracker] Сессия завершена:', {
-      duration: this.getSessionDuration(),
-      totalReceived: this.session.totalReceived,
-      totalSent: this.session.totalSent
-    });
+    // Session ended
   }
 
   /**
@@ -165,7 +158,7 @@ class APISessionTracker {
       sentDetails: this.sentComplaints.slice(-50) // Последние 50 записей
     };
 
-    // [APISessionTracker] Отчёт сгенерирован:', report.sessionInfo);
+    // Report generated
 
     return report;
   }
