@@ -191,15 +191,28 @@ class OptimizedHandler {
       while (remainingKeys.size > 0 && !window.stopProcessing) {
         console.log(`📄 Страница ${pageNumber}: ищем ${remainingKeys.size} отзывов...`);
 
-        // Сканируем текущую страницу
+        // Сканируем текущую страницу (возвращает rowIndex вместо DOM-ссылок)
         const foundOnPage = window.SearchService.scanPageForReviews(complaintsMap, productId);
+
+        // Получаем таблицу для доступа к строкам по индексу
+        const currentTable = window.ElementFinder
+          ? window.ElementFinder.findReviewsTable()
+          : document.querySelector('[class*="Base-table-body"]');
 
         if (foundOnPage.length > 0) {
           console.log(`✅ Найдено ${foundOnPage.length} отзывов на странице ${pageNumber}`);
 
           // Обрабатываем все найденные отзывы
-          for (const { complaint, row } of foundOnPage) {
+          for (const { complaint, rowIndex } of foundOnPage) {
             if (window.stopProcessing) break;
+
+            // Получаем строку по индексу в момент использования (не храним DOM-ссылку)
+            const row = currentTable?.children[rowIndex];
+            if (!row) {
+              console.warn(`⚠️ Строка ${rowIndex} не найдена в таблице, пропускаем`);
+              context.progressService.incrementErrors();
+              continue;
+            }
 
             const key = window.DataExtractor.createReviewKey(
               complaint.productId,

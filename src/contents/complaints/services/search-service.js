@@ -24,7 +24,7 @@
      *
      * @param {Map} complaintsMap - Map с жалобами (ключ: "productId_rating_ISO8601")
      * @param {string} currentArticle - текущий артикул товара
-     * @returns {Array<{complaint: Object, row: HTMLElement}>} - найденные отзывы
+     * @returns {Array<{complaint: Object, rowIndex: number}>} - найденные отзывы (индекс строки, не DOM-ссылка)
      *
      * Ключ формата: "187489568_1_2026-01-18T15:17:00.000Z"
      */
@@ -42,7 +42,8 @@
       const rows = Array.from(table.children);
       console.log(`[SearchService] Всего строк на странице: ${rows.length}`);
 
-      for (const row of rows) {
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
         if (!row) continue;
 
         // Получаем ключ отзыва из строки
@@ -53,10 +54,10 @@
           continue;
         }
 
-        // Ищем жалобу по ключу
+        // Ищем жалобу по ключу — сохраняем индекс строки, а не DOM-ссылку (memory optimization)
         if (complaintsMap.has(key)) {
           const complaint = complaintsMap.get(key);
-          found.push({ complaint, row });
+          found.push({ complaint, rowIndex: i });
           console.log(`✅ [SearchService] Найден отзыв: ${key}`);
         }
       }

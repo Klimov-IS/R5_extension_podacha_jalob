@@ -156,7 +156,7 @@
           const complaintDuration = ((Date.now() - complaintStartTime) / 1000).toFixed(1);
           this.progressService.log("success", `✅ Жалоба ${complaintIndex} отправлена (⏱️ ${complaintDuration}с)`);
 
-          // Сохраняем для отчета
+          // Сохраняем для отчета (без тяжёлых текстовых полей — memory optimization)
           this.processedComplaints.push({
             timestamp: new Date().toISOString(),
             article: complaint.productId,
@@ -164,11 +164,9 @@
             rating: complaint.rating,
             reasonId: reasonId,
             reasonName: reasonName,
-            complaintText: complaintText,
             status: 'sent',
             error: '',
             duration: parseFloat(complaintDuration),
-            reviewText: complaint.text || '',
             author: complaint.authorName || '',
             reviewDate: complaint.reviewDate || ''
           });
@@ -184,11 +182,9 @@
             rating: complaint.rating,
             reasonId: reasonId,
             reasonName: reasonName,
-            complaintText: complaintText,
             status: 'error',
             error: 'Кнопка Отправить не найдена',
             duration: ((Date.now() - complaintStartTime) / 1000).toFixed(1),
-            reviewText: complaint.text || '',
             author: complaint.authorName || '',
             reviewDate: complaint.reviewDate || ''
           });
@@ -269,19 +265,15 @@
         console.error(`[ComplaintService] ❌ Ошибка вызова sendComplaint (skipped):`, apiErr);
       }
 
-      // Сохраняем для отчета
+      // Сохраняем для отчета (без тяжёлых текстовых полей — memory optimization)
       this.processedComplaints.push({
         timestamp: new Date().toISOString(),
         article: complaint.productId,
         reviewId: complaint.id,
         rating: complaint.rating,
-        reasonId: '',
-        reasonName: '',
-        complaintText: '',
         status: 'skipped',
         error: 'Жалоба уже подана или отклонена',
         duration: ((Date.now() - startTime) / 1000).toFixed(1),
-        reviewText: complaint.text || '',
         author: complaint.authorName || '',
         reviewDate: complaint.reviewDate || ''
       });
