@@ -61,21 +61,26 @@ export class StatusSyncService {
    *   statuses: ["Жалоба отклонена", "Выкуп"]
    * }]
    */
-  async syncStatuses(storeId, reviews) {
+  async syncStatuses(storeId, reviews, notFoundReviewKeys = null) {
     if (!storeId) {
       console.error('[StatusSync] ❌ storeId обязателен');
       return { success: false, error: 'storeId обязателен' };
     }
 
-    if (!reviews || reviews.length === 0) {
+    if ((!reviews || reviews.length === 0) && (!notFoundReviewKeys || notFoundReviewKeys.length === 0)) {
       return { success: true, data: { received: 0, created: 0, updated: 0 } };
     }
 
     // Преобразуем отзывы в формат API
-    const formattedReviews = reviews.map(r => this._formatReviewForAPI(r));
+    const formattedReviews = (reviews || []).map(r => this._formatReviewForAPI(r));
 
     // Разбиваем на батчи
     const batches = this._splitIntoBatches(formattedReviews, this.BATCH_SIZE);
+
+    // Если нет отзывов, но есть notFoundKeys — создаём 1 батч (пустой reviews + notFoundKeys)
+    if (batches.length === 0 && notFoundReviewKeys && notFoundReviewKeys.length > 0) {
+      batches.push([]);
+    }
 
     // Общая статистика
     const totalStats = {
@@ -85,12 +90,13 @@ export class StatusSyncService {
       errors: 0
     };
 
-    // Отправляем батчи
+    // Отправляем батчи (notFoundReviewKeys только в первый батч)
     for (let i = 0; i < batches.length; i++) {
       const batch = batches[i];
+      const batchNotFound = (i === 0) ? notFoundReviewKeys : null;
 
       try {
-        const result = await this._sendBatch(storeId, batch);
+        const result = await this._sendBatch(storeId, batch, batchNotFound);
 
         if (result.success) {
           totalStats.received += result.data.received || 0;
@@ -129,7 +135,7 @@ export class StatusSyncService {
    * Отправить один батч отзывов
    * @private
    */
-  async _sendBatch(storeId, reviews) {
+  async _sendBatch(storeId, reviews, notFoundReviewKeys = null) {
     const baseURL = await this._getBaseURL();
     const token = await this._getToken();
     const url = `${baseURL}${this.endpoint}`;
@@ -139,6 +145,10 @@ export class StatusSyncService {
       parsedAt: new Date().toISOString(),
       reviews: reviews
     };
+
+    if (notFoundReviewKeys && notFoundReviewKeys.length > 0) {
+      payload.notFoundReviewKeys = notFoundReviewKeys;
+    }
 
     try {
       const response = await fetch(url, {

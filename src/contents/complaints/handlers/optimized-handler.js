@@ -668,7 +668,14 @@ class OptimizedHandler {
           if (nk) complaintsMap.set(nk, complaint);
         }
 
-        console.log(`[TW]   Lookup Maps: chatOpens=${chatOpensMap.size} ключей, complaints=${complaintsMap.size} ключей`);
+        // StatusParse tracking: ключи которые нужно найти на странице
+        const statusParseKeys = new Set();
+        for (const sp of (articleData.statusParses || [])) {
+          const nk = this.normalizeReviewKey(sp.reviewKey);
+          if (nk) statusParseKeys.add(nk);
+        }
+
+        console.log(`[TW]   Lookup Maps: chatOpens=${chatOpensMap.size} ключей, complaints=${complaintsMap.size} ключей, statusParses=${statusParseKeys.size} ключей`);
 
         // Tracking Sets — prevent re-processing across pages
         const processedChatKeys = new Set();
@@ -756,6 +763,9 @@ class OptimizedHandler {
               });
               report.totalReviewsSynced++;
               articleResult.reviewsSynced++;
+
+              // Отмечаем найденный statusParse ключ
+              statusParseKeys.delete(normalizedKey);
 
               // --- PHASE 2: CHAT OPENS ---
               if (chatOpensMap.has(normalizedKey) && !processedChatKeys.has(normalizedKey)) {
@@ -925,6 +935,13 @@ class OptimizedHandler {
           } // end page loop
         } // end tab loop
 
+        // === NOT FOUND REVIEW KEYS → send to backend for targeted sync ===
+        if (statusParseKeys.size > 0 && storeId) {
+          const notFoundKeys = Array.from(statusParseKeys);
+          console.log(`[TW]   notFoundReviewKeys: ${notFoundKeys.length} ключей не найдены на странице`);
+          this.syncReviewStatuses(storeId, [], notFoundKeys).catch(() => {});
+        }
+
         // === ARTICLE SUMMARY ===
         report.articleResults.push(articleResult);
         console.log(`%c[TW] ── Артикул ${productId} завершён ──`, 'color:#059669;font-weight:bold');
@@ -970,13 +987,13 @@ class OptimizedHandler {
      * @param {Array} reviews - массив отзывов с данными от DataExtractor
      * @returns {Promise<Object>} - результат синхронизации
      */
-    static async syncReviewStatuses(storeId, reviews) {
+    static async syncReviewStatuses(storeId, reviews, notFoundReviewKeys = null) {
       if (!storeId) {
         console.error('[StatusSync] storeId обязателен');
         return { success: false, error: 'storeId обязателен' };
       }
 
-      if (!reviews || reviews.length === 0) {
+      if ((!reviews || reviews.length === 0) && (!notFoundReviewKeys || notFoundReviewKeys.length === 0)) {
         return { success: true, data: { received: 0, created: 0, updated: 0 } };
       }
 
@@ -1007,14 +1024,16 @@ class OptimizedHandler {
         window.addEventListener('wb-sync-response', responseHandler);
 
         // Отправляем запрос в ISOLATED world через bridge
-        window.dispatchEvent(new CustomEvent('wb-sync-request', {
-          detail: {
-            requestId: requestId,
-            type: 'syncReviewStatuses',
-            storeId: storeId,
-            reviews: reviews
-          }
-        }));
+        const detail = {
+          requestId: requestId,
+          type: 'syncReviewStatuses',
+          storeId: storeId,
+          reviews: reviews || []
+        };
+        if (notFoundReviewKeys && notFoundReviewKeys.length > 0) {
+          detail.notFoundReviewKeys = notFoundReviewKeys;
+        }
+        window.dispatchEvent(new CustomEvent('wb-sync-request', { detail }));
       });
     }
 

@@ -147,11 +147,11 @@ function getEnabledTaskTypes() {
 
 function updateSelectedCount() {
   if (!loadedTasks) return;
-  const totals = loadedTasks.totals || {};
+  const tc = loadedTasks.totalCounts || loadedTasks.totals || {};
   let total = 0;
-  if (chkStatusParses.checked) total += totals.statusParses || 0;
-  if (chkChatOpens.checked) total += totals.chatOpens || 0;
-  if (chkComplaints.checked) total += totals.complaints || 0;
+  if (chkStatusParses.checked) total += tc.statusParses || 0;
+  if (chkChatOpens.checked) total += tc.chatOpens || 0;
+  if (chkComplaints.checked) total += tc.complaints || 0;
   complaintsCountEl.textContent = total;
   btnSubmit.disabled = total === 0;
 }
@@ -199,29 +199,31 @@ async function getTasks() {
     loadedTasks = apiResponse.data;
 
     const totals = loadedTasks.totals || {};
-    const totalCount = (totals.statusParses || 0) + (totals.chatOpens || 0) + (totals.complaints || 0);
+    // totalCounts = реальный пул задач (без LIMIT), fallback на totals (батч)
+    const tc = loadedTasks.totalCounts || totals;
+    const totalCount = (tc.statusParses || 0) + (tc.chatOpens || 0) + (tc.complaints || 0);
 
     if (totalCount === 0) {
       throw new Error('Нет задач для обработки. Все задачи уже выполнены.');
     }
 
-    // Показываем счётчик
+    // Показываем счётчик (реальный пул)
     complaintsCountEl.textContent = totalCount;
     complaintsInfo.classList.remove('hidden');
     btnSubmit.disabled = false;
 
-    // Показываем чекбоксы типов задач
-    countStatusParses.textContent = totals.statusParses || 0;
-    countChatOpens.textContent = totals.chatOpens || 0;
-    countComplaints.textContent = totals.complaints || 0;
+    // Показываем чекбоксы типов задач (реальный пул)
+    countStatusParses.textContent = tc.statusParses || 0;
+    countChatOpens.textContent = tc.chatOpens || 0;
+    countComplaints.textContent = tc.complaints || 0;
 
     // Disable + uncheck types with 0 tasks
-    chkStatusParses.disabled = !(totals.statusParses > 0);
-    chkStatusParses.checked = totals.statusParses > 0;
-    chkChatOpens.disabled = !(totals.chatOpens > 0);
-    chkChatOpens.checked = totals.chatOpens > 0;
-    chkComplaints.disabled = !(totals.complaints > 0);
-    chkComplaints.checked = totals.complaints > 0;
+    chkStatusParses.disabled = !(tc.statusParses > 0);
+    chkStatusParses.checked = tc.statusParses > 0;
+    chkChatOpens.disabled = !(tc.chatOpens > 0);
+    chkChatOpens.checked = tc.chatOpens > 0;
+    chkComplaints.disabled = !(tc.complaints > 0);
+    chkComplaints.checked = tc.complaints > 0;
 
     taskTypeSelector.classList.add('active');
 
@@ -251,20 +253,21 @@ async function submitTasks() {
   }
 
   const totals = loadedTasks.totals || {};
+  const tc = loadedTasks.totalCounts || totals;
 
   // Подтверждение — только выбранные типы
   const enabledTypes = getEnabledTaskTypes();
   const storeName = storeSelect.options[storeSelect.selectedIndex].textContent;
 
   const typeLines = [];
-  if (enabledTypes.includes('statusParses')) typeLines.push(`  • Парсинг статусов: ${totals.statusParses || 0}`);
-  if (enabledTypes.includes('chatOpens')) typeLines.push(`  • Открытие чатов: ${totals.chatOpens || 0}`);
-  if (enabledTypes.includes('complaints')) typeLines.push(`  • Подача жалоб: ${totals.complaints || 0}`);
+  if (enabledTypes.includes('statusParses')) typeLines.push(`  • Парсинг статусов: ${tc.statusParses || 0} (батч: ${totals.statusParses || 0})`);
+  if (enabledTypes.includes('chatOpens')) typeLines.push(`  • Открытие чатов: ${tc.chatOpens || 0} (батч: ${totals.chatOpens || 0})`);
+  if (enabledTypes.includes('complaints')) typeLines.push(`  • Подача жалоб: ${tc.complaints || 0} (батч: ${totals.complaints || 0})`);
 
   const confirmed = confirm(
     `ВНИМАНИЕ! РЕАЛЬНАЯ ОБРАБОТКА ЗАДАЧ!\n\n` +
     `Магазин: ${storeName}\n\n` +
-    `Выбранные задачи:\n` +
+    `Выбранные задачи (всего / первый батч):\n` +
     typeLines.join('\n') + `\n\n` +
     `Система будет запрашивать задачи порциями,\n` +
     `пока API не вернёт 0 задач (все обработаны).\n\n` +

@@ -26,7 +26,7 @@ export class StatusSyncHandler {
    * @returns {Promise<Object>} - результат синхронизации
    */
   async syncStatuses(message) {
-    const { storeId, reviews } = message;
+    const { storeId, reviews, notFoundReviewKeys } = message;
 
     if (!storeId) {
       return {
@@ -35,7 +35,7 @@ export class StatusSyncHandler {
       };
     }
 
-    if (!reviews || reviews.length === 0) {
+    if ((!reviews || reviews.length === 0) && (!notFoundReviewKeys || notFoundReviewKeys.length === 0)) {
       return {
         success: true,
         data: { received: 0, created: 0, updated: 0 }
@@ -43,7 +43,7 @@ export class StatusSyncHandler {
     }
 
     try {
-      const result = await statusSyncService.syncStatuses(storeId, reviews);
+      const result = await statusSyncService.syncStatuses(storeId, reviews || [], notFoundReviewKeys);
       return result;
     } catch (error) {
       console.error(`[StatusSyncHandler] ❌ Ошибка синхронизации:`, error);
