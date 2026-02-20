@@ -188,7 +188,8 @@ export class StatusSyncService {
       rating: review.rating,
       reviewDate: review.reviewDate,
       statuses: statuses,
-      canSubmitComplaint: this._canSubmitComplaint(statuses)
+      canSubmitComplaint: this._canSubmitComplaint(statuses),
+      chatStatus: review.chatStatus || null
     };
   }
 

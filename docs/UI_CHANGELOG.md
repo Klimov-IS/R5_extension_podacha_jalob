@@ -21,6 +21,88 @@ Each entry should include:
 
 ### February 2026
 
+#### 2026-02-19: Unified Tasks API Migration (v4.0)
+
+**Change Type:** Feature — Unified tasks workflow replacing separate complaints + chat rules endpoints
+
+**What Was Added:**
+
+1. **`pilotAPI.getTasks(storeId)`** — calls `GET /api/extension/stores/{storeId}/tasks`
+2. **`OptimizedHandler.runTaskWorkflow(options)`** — unified handler processing 3 task types per article:
+   - `statusParses`: passive status collection for sync
+   - `chatOpens`: chat opening/linking (type: "open" | "link")
+   - `complaints`: complaint submission via WB modal
+3. **`'runTaskWorkflow'` content bridge** — MAIN ↔ ISOLATED world message passing
+4. **`'getTasks'` message route** — background handler routing
+5. **`diagnostic.js` v4.0** — migrated UI from `getComplaints` → `getTasks`, multi-round loop with `runTaskWorkflow`
+
+**Architecture:** Backend acts as "brain" — decides which tasks to execute. Extension acts as "executor" — processes matched tasks per review row within page loop. Multi-round: repeat until backend returns 0 tasks.
+
+**Files Modified:** `pilot-api.js`, `complaints-handler.js`, `message-router.js`, `content.js`, `main-world-entry.js`, `optimized-handler.js`, `diagnostic.js`, `diagnostic.html`
+
+**Docs Updated:** `BACKEND_API.md` (section 2.10), `WORKFLOWS.md` (section 3b), `UI_CHANGELOG.md`
+
+**Backward Compatibility:** Old `getComplaints` + `test4Diagnostics` flow preserved, not removed.
+
+---
+
+#### 2026-02-19: Chat Status Parsing Added to Status Sync (Sprint 2)
+
+**Change Type:** Feature — New field `chatStatus` in review status sync
+
+**What Was Added:**
+
+1. **`ElementFinder.findChatButton(row)`** — finds chat button in review row by SVG viewBox `0 0 16 16`
+2. **`DataExtractor.getChatStatus(row)`** — determines chat button state using computed color luminance:
+   - `chat_not_activated` — button disabled (transparent)
+   - `chat_available` — grey active button (luminance >= 0.4)
+   - `chat_opened` — black active button (luminance < 0.4)
+3. **`chatStatus` field** added to `POST /api/extension/review-statuses` payload
+4. **`CHAT_STATUS_DETECTION`** config added to selectors catalog (luminance threshold)
+
+**Files Modified:** `element-finder.js`, `data-extractor.js`, `optimized-handler.js`, `status-sync-service.js`, `selectors.catalog.js`
+
+**Docs Created:** `docs/Sprint 2. Chats/TZ_CHAT_STATUS_API.md` — backend team technical spec
+
+**Backend Integration (same day):** Backend deployed migration `017_add_chat_status_opened.sql`. Extension values mapped to DB ENUM: `chat_not_activated` → `unavailable`, `chat_available` → `available`, `chat_opened` → `opened`. New response field `chatStatusSynced`. UI filter "Статус чата" added to Reviews tab.
+
+---
+
+#### 2026-02-17: Chat Button & Chat Page DOM Recon (Sprint 2)
+
+**Change Type:** Discovery / Documentation (no code fix needed)
+
+**What Was Documented:**
+
+1. **Chat Button in review row** — 3 states identified:
+   - Grey (not opened): `button:not([disabled])` — clickable, opens new chat
+   - Black (already opened): `button:not([disabled])` — clickable, opens existing chat
+   - Transparent (disabled): `button[disabled]` — cabinet feature not enabled
+   - All use same SVG icon (viewBox `0 0 16 16`)
+   - Located in `Buttons-cell` container alongside menu button (three dots)
+
+2. **Chat page URL format confirmed:**
+   - `https://seller.wildberries.ru/chat-with-clients?chatId={UUID}`
+   - chatId is UUID: `a8775c6f-049b-da67-1045-421477a8bfcb`
+
+3. **System anchor message:**
+   - Text: `"Чат с покупателем по товару {nmId}"`
+   - Stable selectors: `[data-testid="message"]`, `span[data-name="Text"]`
+   - nmId extractable via regex `/товару\s+(\d+)/i`
+
+4. **Message input field:**
+   - `textarea#messageInput[name="messageInput"]` inside `[data-name="TextAreaInput"]`
+
+**Files Updated:**
+- `src/contents/complaints/dom/selectors.catalog.js` — added CHAT_BUTTON, CHAT_PAGE, CHAT_MESSAGE, CHAT_ANCHOR, CHAT_INPUT, CHAT_TIMING
+- `docs/DOM_CONTRACT.md` — added sections 2.16 (Chat Button) and 2.17 (Chat Page)
+- `docs/UI_CHANGELOG.md` — this entry
+- `docs/Sprint 2. Chats/TASK_чаты.md` — updated MVP scope
+
+**Commit:** TBD
+
+---
+
 #### 2026-02-08: Store Dropdown Shows Draft Complaints Count
 
 **Change Type:** Feature (API v1.2.0)

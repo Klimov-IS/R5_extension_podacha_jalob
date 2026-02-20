@@ -141,6 +141,63 @@ function injectMainWorldBundle() {
         return true; // Синхронно возвращаем true для async ответа
       }
 
+      // ============ TASK WORKFLOW PROCESSING ============
+      if (request.type === "runTaskWorkflow") {
+        const tasks = request.tasks || {};
+        const storeId = request.storeId || null;
+
+        if (!tasks.articles || Object.keys(tasks.articles).length === 0) {
+          sendResponse({ success: false, error: 'No tasks to process' });
+          return true;
+        }
+
+        (async () => {
+          const requestId = `tasks_${Date.now()}`;
+
+          const responsePromise = new Promise((resolve, reject) => {
+            const responseHandler = (event) => {
+              if (event.detail.requestId === requestId) {
+                clearTimeout(timeout);
+                window.removeEventListener('wb-main-world-response', responseHandler);
+
+                if (event.detail.success) {
+                  resolve(event.detail.data);
+                } else {
+                  reject(new Error(event.detail.error));
+                }
+              }
+            };
+
+            const timeout = setTimeout(() => {
+              window.removeEventListener('wb-main-world-response', responseHandler);
+              reject(new Error('Timeout waiting for Task Workflow response'));
+            }, 1800000); // 30 минут
+
+            window.addEventListener('wb-main-world-response', responseHandler);
+          });
+
+          window.dispatchEvent(new CustomEvent('wb-call-main-world', {
+            detail: {
+              action: 'runTaskWorkflow',
+              data: { tasks, storeId },
+              requestId
+            }
+          }));
+
+          request.tasks = null; // Allow GC
+
+          try {
+            const report = await responsePromise;
+            sendResponse({ success: true, report });
+          } catch (error) {
+            console.error("[Complaints] Task workflow error:", error);
+            sendResponse({ success: false, error: error.message });
+          }
+        })();
+
+        return true;
+      }
+
       // ============ UNKNOWN REQUEST TYPE ============
       console.warn("[Complaints] ⚠️ Неизвестный тип запроса:", request.type);
     });
@@ -230,6 +287,82 @@ function injectMainWorldBundle() {
             requestId: requestId,
             response: { error: error.message }
           }
+        }));
+      }
+    });
+
+    // ========================================================================
+    // BRIDGE: Chat Processing (открытие чатов)
+    // MAIN world → ISOLATED world → Background → ISOLATED world → MAIN world
+    // ========================================================================
+
+    window.addEventListener('wb-chat-request', async (event) => {
+      const { requestId, ...data } = event.detail;
+
+      console.log('[Complaints] wb-chat-request → sending processChatTab to background', { requestId, productId: data.productId, storeId: data.storeId });
+
+      try {
+        const response = await chrome.runtime.sendMessage({
+          type: 'processChatTab',
+          ...data
+        });
+
+        console.log('[Complaints] wb-chat-request ← response from background', { requestId, success: response?.success, chatRecordId: response?.chatRecordId });
+
+        window.dispatchEvent(new CustomEvent('wb-chat-response', {
+          detail: { requestId, response }
+        }));
+      } catch (error) {
+        console.error('[Complaints] Chat bridge error:', error);
+        window.dispatchEvent(new CustomEvent('wb-chat-response', {
+          detail: { requestId, response: { success: false, error: error.message } }
+        }));
+      }
+    });
+
+    // ========================================================================
+    // BRIDGE: Create Tab (обход popup-блокировки Chrome)
+    // MAIN world → ISOLATED world → Background → chrome.tabs.create()
+    // ========================================================================
+
+    window.addEventListener('wb-create-tab', async (event) => {
+      const { url } = event.detail;
+      if (!url) return;
+
+      console.log('[Complaints] wb-create-tab → creating tab:', url?.substring(0, 80));
+
+      try {
+        const result = await chrome.runtime.sendMessage({
+          type: 'createTab',
+          url: url
+        });
+        console.log('[Complaints] wb-create-tab ← result:', result);
+      } catch (error) {
+        console.error('[Complaints] Create tab bridge error:', error);
+      }
+    });
+
+    // ========================================================================
+    // BRIDGE: Chat Rules (получение правил чатов)
+    // MAIN world → ISOLATED world → Background → ISOLATED world → MAIN world
+    // ========================================================================
+
+    window.addEventListener('wb-chat-rules-request', async (event) => {
+      const { requestId, storeId } = event.detail;
+
+      try {
+        const response = await chrome.runtime.sendMessage({
+          type: 'getChatRules',
+          storeId
+        });
+
+        window.dispatchEvent(new CustomEvent('wb-chat-rules-response', {
+          detail: { requestId, response }
+        }));
+      } catch (error) {
+        console.error('[Complaints] Chat rules bridge error:', error);
+        window.dispatchEvent(new CustomEvent('wb-chat-rules-response', {
+          detail: { requestId, response: { success: false, error: error.message } }
         }));
       }
     });

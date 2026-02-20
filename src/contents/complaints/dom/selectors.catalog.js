@@ -211,6 +211,118 @@ const TAB_SELECTORS = {
   textElement: '[class*="Item__text"]'
 };
 
+// ============================================================
+// CHAT WORKFLOW SELECTORS (Sprint 2 — Review-Chat Linking)
+// ============================================================
+
+/**
+ * Chat Button - Opens chat with customer from review row
+ *
+ * Located inside the same Buttons-cell as menu button (three dots).
+ * Structure:
+ *   th[data-testid="Base-table-cell"]
+ *     └ div.Buttons-cell
+ *         ├ div.Switchable-portal-tooltip  ← CHAT BUTTON
+ *         │   └ span.Portal-tooltip__text
+ *         │       └ button > svg[viewBox="0 0 16 16"]
+ *         └ div[data-name="MoreButton"]    ← MENU BUTTON (three dots)
+ *             └ button > svg[viewBox="-10 -3 24 24"]
+ *
+ * Three states:
+ * - Grey (not opened yet): button:not([disabled]) — clickable
+ * - Black (already opened): button:not([disabled]) — clickable (different CSS class)
+ * - Transparent (disabled): button[disabled] — skip
+ *
+ * MVP: click ALL non-disabled buttons (grey AND black) to parse chat data.
+ */
+const CHAT_BUTTON_SELECTORS = {
+  buttonsContainer: '[class*="Buttons-cell"]',
+  svgViewBox: '0 0 16 16',             // Chat SVG viewBox (vs "-10" for menu)
+  svgSize: 16,                          // Chat SVG is 16x16 (vs 24x24 for menu)
+  excludeParent: '[data-name="MoreButton"]', // Menu button lives here, NOT chat
+  disabledCheck: '[disabled]'
+};
+
+/**
+ * Chat Page — URL Detection
+ *
+ * URL format: https://seller.wildberries.ru/chat-with-clients?chatId={UUID}
+ * Example:    https://seller.wildberries.ru/chat-with-clients?chatId=a8775c6f-049b-da67-1045-421477a8bfcb
+ */
+const CHAT_PAGE_SELECTORS = {
+  urlPattern: '/chat-with-clients',
+  chatIdParam: 'chatId',
+  chatIdRegex: /chatId=([a-f0-9-]+)/i
+};
+
+/**
+ * Chat Page — Messages List
+ *
+ * Structure:
+ *   section.ChatWindow__messages > ul.ChatWindow__list
+ *     └ li[data-addtime] ← each message
+ *         └ section[data-testid="message"]
+ *             └ div[data-testid="message-content"]
+ *                 └ div.Message__text
+ *                     └ span[data-name="Text"]  ← message text
+ */
+const CHAT_MESSAGE_SELECTORS = {
+  messagesContainer: '[class*="ChatWindow__messages"]',
+  messagesList: '[class*="ChatWindow__list"]',
+  messageItem: 'li[data-addtime]',
+  messageSection: '[data-testid="message"]',
+  messageContent: '[data-testid="message-content"]',
+  messageText: 'span[data-name="Text"]',
+  dateBadge: '[data-testid="date-badge"]',
+  ownMessageClass: 'list-element--own'  // Partial match — seller's own messages
+};
+
+/**
+ * Chat Page — System Anchor Message
+ *
+ * First message in chat: "Чат с покупателем по товару {nmId}"
+ * Used to link review ↔ chat.
+ */
+const CHAT_ANCHOR_SELECTORS = {
+  anchorTextPattern: /товару\s+(\d+)/i,                   // Extract nmId
+  anchorValidation: /(?:чат|покупател|товар)/i,           // Validate it's the system message
+  anchorFullPattern: /чат\s+с\s+покупател\S*\s+по\s+товару\s+(\d+)/i  // Strict match
+};
+
+/**
+ * Chat Page — Message Input (Sprint 2: sending messages)
+ *
+ * Structure:
+ *   div[data-name="TextAreaInput"]
+ *     └ textarea#messageInput[name="messageInput"][placeholder="Сообщение..."]
+ */
+const CHAT_INPUT_SELECTORS = {
+  container: '[data-name="TextAreaInput"]',
+  textarea: '#messageInput',
+  textareaFallback: 'textarea[name="messageInput"]',
+  placeholder: 'Сообщение...'
+};
+
+/**
+ * Chat Status Detection config
+ * Used by DataExtractor.getChatStatus() to distinguish grey (available) vs black (opened) buttons.
+ * CSS classes are hashed and unstable, so we use computed color luminance.
+ */
+const CHAT_STATUS_DETECTION = {
+  luminanceThreshold: 0.4  // < 0.4 = dark/black (chat_opened), >= 0.4 = grey (chat_available)
+};
+
+/**
+ * Chat Workflow Timing constants (milliseconds)
+ */
+const CHAT_TIMING = {
+  chatTabLoadWait: 10000,    // Max wait for chat tab to load
+  anchorScrollWait: 500,     // Pause between scroll-up attempts
+  anchorMaxScrolls: 20,      // Max scroll attempts to find anchor
+  betweenChats: 3000,        // Cooldown between opening chats (from API globalLimits)
+  chatPageReadyWait: 3000    // Wait for chat messages to render after page load
+};
+
 /**
  * Timing constants (milliseconds)
  */
@@ -246,7 +358,15 @@ window.SELECTORS = {
   SEARCH: SEARCH_SELECTORS,
   PAGINATION: PAGINATION_SELECTORS,
   TAB: TAB_SELECTORS,
-  TIMING
+  TIMING,
+  // Chat workflow (Sprint 2)
+  CHAT_BUTTON: CHAT_BUTTON_SELECTORS,
+  CHAT_STATUS_DETECTION,
+  CHAT_PAGE: CHAT_PAGE_SELECTORS,
+  CHAT_MESSAGE: CHAT_MESSAGE_SELECTORS,
+  CHAT_ANCHOR: CHAT_ANCHOR_SELECTORS,
+  CHAT_INPUT: CHAT_INPUT_SELECTORS,
+  CHAT_TIMING
 };
 
 // Module loaded

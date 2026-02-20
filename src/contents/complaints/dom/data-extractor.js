@@ -332,6 +332,76 @@
     }
 
     /**
+     * Получить статус кнопки чата из строки отзыва
+     *
+     * Кнопка чата имеет 3 состояния:
+     * - Прозрачная (disabled): "chat_not_activated" — функция чатов не активирована в кабинете
+     * - Серая (активная): "chat_available" — можно открыть новый чат
+     * - Чёрная (активная): "chat_opened" — чат уже открыт
+     *
+     * Различаем серую и чёрную кнопки по яркости computed color (CSS классы нестабильны).
+     * SVG использует fill="currentColor", поэтому цвет наследуется от CSS color кнопки.
+     *
+     * @param {HTMLElement} row - строка таблицы
+     * @returns {string|null} - "chat_not_activated" | "chat_available" | "chat_opened" | null
+     */
+    static getChatStatus(row) {
+      try {
+        const button = window.ElementFinder.findChatButton(row);
+
+        if (!button) {
+          return null;
+        }
+
+        // Disabled = функция чатов не активирована
+        if (button.disabled || button.hasAttribute('disabled')) {
+          return 'chat_not_activated';
+        }
+
+        // Активная кнопка — определяем серая или чёрная по яркости цвета
+        const computedColor = getComputedStyle(button).color;
+        const luminance = this._getColorLuminance(computedColor);
+
+        if (luminance === null) {
+          // Не удалось распарсить цвет — логируем и возвращаем как активную
+          console.warn('[DataExtractor] getChatStatus: не удалось определить цвет кнопки, color:', computedColor);
+          return 'chat_available';
+        }
+
+        // Порог яркости: чёрная кнопка (opened) < 0.4, серая (available) >= 0.4
+        const LUMINANCE_THRESHOLD = window.SELECTORS?.CHAT_STATUS_DETECTION?.luminanceThreshold ?? 0.4;
+
+        return luminance < LUMINANCE_THRESHOLD ? 'chat_opened' : 'chat_available';
+
+      } catch (error) {
+        console.error('[DataExtractor] Ошибка при определении статуса чата:', error);
+        return null;
+      }
+    }
+
+    /**
+     * Вычислить относительную яркость цвета из CSS строки
+     *
+     * @param {string} colorStr - CSS color строка, например "rgb(155, 155, 155)"
+     * @returns {number|null} - яркость 0..1 или null при ошибке парсинга
+     * @private
+     */
+    static _getColorLuminance(colorStr) {
+      if (!colorStr) return null;
+
+      // Парсим rgb(R, G, B) или rgba(R, G, B, A)
+      const match = colorStr.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+      if (!match) return null;
+
+      const r = parseInt(match[1], 10) / 255;
+      const g = parseInt(match[2], 10) / 255;
+      const b = parseInt(match[3], 10) / 255;
+
+      // Relative luminance (ITU-R BT.709)
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    }
+
+    /**
      * Извлечь все данные из строки отзыва
      *
      * @param {HTMLElement} row - строка таблицы
@@ -344,7 +414,8 @@
      *   rating: 1,
      *   reviewDate: "2026-01-18T15:17:00.000Z", // ISO 8601
      *   key: "187489568_1_2026-01-18T15:17:00.000Z",
-     *   statuses: ["Виден", "Жалоба отклонена", "Выкуп"]
+     *   statuses: ["Виден", "Жалоба отклонена", "Выкуп"],
+     *   chatStatus: "chat_opened" // NEW: статус кнопки чата
      * }
      *
      * Note: text field removed for memory optimization (not used in complaint flow).
@@ -354,6 +425,7 @@
       const reviewDate = this.getReviewDate(row); // Теперь возвращает ISO 8601
       const rating = this.getRating(row);
       const statuses = this.getReviewStatuses(row);
+      const chatStatus = this.getChatStatus(row);
 
       if (!reviewDate || !rating) {
         return null;
@@ -366,7 +438,8 @@
         rating: rating,
         reviewDate: reviewDate, // ISO 8601 формат
         key: reviewKey,
-        statuses: statuses
+        statuses: statuses,
+        chatStatus: chatStatus
       };
     }
   }

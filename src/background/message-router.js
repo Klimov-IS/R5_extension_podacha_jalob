@@ -11,6 +11,7 @@ import { ReportsHandler } from './handlers/reports-handler.js';
 import { ReviewsHandler } from './handlers/reviews-handler.js';
 import { SettingsHandler } from './handlers/settings-handler.js';
 import { StatusSyncHandler } from './handlers/status-sync-handler.js';
+import { ChatHandler } from './handlers/chat-handler.js';
 import { storeManager } from '../services/store-manager.js';
 
 /**
@@ -25,6 +26,7 @@ class MessageRouter {
       reviews: new ReviewsHandler(),
       settings: new SettingsHandler(),
       statusSync: new StatusSyncHandler(),
+      chat: new ChatHandler(),
     };
   }
 
@@ -63,6 +65,11 @@ class MessageRouter {
         case 'sendComplaint':
           const complaint = await this.handlers.complaints.sendComplaint(message);
           sendResponse(complaint);
+          break;
+
+        case 'getTasks':
+          const tasks = await this.handlers.complaints.getTasks(message);
+          sendResponse(tasks);
           break;
 
         // === REPORTS HANDLER ===
@@ -117,6 +124,29 @@ class MessageRouter {
         case 'getReviewStatuses':
           const statuses = await this.handlers.statusSync.getStatuses(message);
           sendResponse(statuses);
+          break;
+
+        // === CHAT HANDLER ===
+        case 'getChatRules':
+          const chatRules = await this.handlers.chat.getChatRules(message);
+          sendResponse(chatRules);
+          break;
+
+        case 'processChatTab':
+          const chatResult = await this.handlers.chat.processChatTab(message);
+          sendResponse(chatResult);
+          break;
+
+        case 'createTab':
+          // Обход popup-блокировки: MAIN world перехватил window.open(),
+          // background создаёт вкладку через chrome.tabs.create() (без ограничений)
+          try {
+            const newTab = await chrome.tabs.create({ url: message.url, active: false });
+            sendResponse({ success: true, tabId: newTab.id });
+          } catch (tabErr) {
+            console.error('[MessageRouter] createTab error:', tabErr);
+            sendResponse({ success: false, error: tabErr.message });
+          }
           break;
 
         // === STORES ===

@@ -68,6 +68,48 @@
     }
 
     /**
+     * Ищет кнопку чата в строке отзыва
+     *
+     * ФЕВРАЛЬ 2026: Кнопка чата находится в Buttons-cell рядом с кнопкой меню (троеточие).
+     * Различаем по SVG viewBox: чат = "0 0 16 16", меню = "-10 -3 24 24".
+     * Кнопка чата НЕ внутри [data-name="MoreButton"].
+     *
+     * @param {HTMLElement} row - строка таблицы отзывов
+     * @returns {HTMLButtonElement|null} - кнопка чата или null
+     */
+    static findChatButton(row) {
+      // Способ 1 (ПРИОРИТЕТНЫЙ): Ищем кнопку с SVG viewBox "0 0 16 16", не внутри MoreButton
+      const allButtons = row.querySelectorAll('button[class*="onlyIcon"]');
+      for (const btn of allButtons) {
+        // Исключаем кнопки внутри MoreButton (это меню)
+        if (btn.closest('[data-name="MoreButton"]')) continue;
+
+        const svg = btn.querySelector('svg');
+        const viewBox = svg?.getAttribute('viewBox');
+        if (viewBox && viewBox === '0 0 16 16') {
+          return btn;
+        }
+      }
+
+      // Способ 2: Ищем в Buttons-cell контейнере
+      const buttonsCell = row.querySelector('[class*="Buttons-cell"]');
+      if (buttonsCell) {
+        const svgs = buttonsCell.querySelectorAll('svg');
+        for (const svg of svgs) {
+          const viewBox = svg.getAttribute('viewBox');
+          if (viewBox && viewBox === '0 0 16 16') {
+            const btn = svg.closest('button');
+            if (btn && !btn.closest('[data-name="MoreButton"]')) {
+              return btn;
+            }
+          }
+        }
+      }
+
+      return null;
+    }
+
+    /**
      * Ищет открытый dropdown с меню
      *
      * СТРУКТУРА HTML (январь 2026):

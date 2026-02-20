@@ -204,6 +204,55 @@ class PilotAPI {
   }
 
   /**
+   * Получить единый список задач для магазина (Unified Tasks API)
+   *
+   * Возвращает 3 типа задач, сгруппированных по артикулу:
+   * - statusParses: отзывы для парсинга статусов
+   * - chatOpens: чаты для открытия/привязки
+   * - complaints: жалобы для подачи
+   *
+   * @param {string} [storeId] - ID магазина
+   * @returns {Promise<Object>} { storeId, articles, totals, limits }
+   */
+  async getTasks(storeId) {
+    await this.initialize();
+
+    const targetStoreId = storeId || this.storeId;
+    const url = `${this.baseURL}/api/extension/stores/${targetStoreId}/tasks`;
+
+    const response = await fetchWithRetry(
+      url,
+      {
+        headers: {
+          'Authorization': `Bearer ${this.token}`,
+          'Content-Type': 'application/json'
+        },
+      },
+      {
+        maxRetries: 3,
+        baseDelay: 1000,
+        shouldRetry: (res) => res.status === 503
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => '');
+
+      if (response.status === 401) {
+        throw new Error('Ошибка авторизации: проверьте Backend Token');
+      } else if (response.status === 404) {
+        throw new Error('Магазин не найден: проверьте Store ID');
+      } else if (response.status === 429) {
+        throw new Error('Превышен лимит запросов');
+      }
+
+      throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
+    }
+
+    return await response.json();
+  }
+
+  /**
    * Health check - проверка работоспособности API
    * @returns {Promise<Object>} - Статус API
    */

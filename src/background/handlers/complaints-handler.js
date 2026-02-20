@@ -47,6 +47,24 @@ export class ComplaintsHandler {
   }
 
   /**
+   * Получить единый список задач для магазина (Unified Tasks API)
+   * @param {Object} message
+   * @param {string} message.storeId - ID магазина
+   * @returns {Promise<Object>} { data: Object } или { error: string }
+   */
+  async getTasks(message) {
+    const { storeId } = message;
+
+    try {
+      const data = await pilotAPI.getTasks(storeId);
+      return { data };
+    } catch (err) {
+      console.error('[ComplaintsHandler] getTasks error:', err);
+      return { error: err.message };
+    }
+  }
+
+  /**
    * Отметить жалобу как отправленную в WB
    * @param {Object} message - Сообщение
    * @param {string} message.storeId - ID магазина

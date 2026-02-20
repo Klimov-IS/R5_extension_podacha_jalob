@@ -470,6 +470,164 @@ React controlled components reset value on direct assignment. Must use:
 
 ---
 
+## 2.16 Chat Button (Review Row)
+
+**What it represents:** Button to open/view chat with the customer who left the review.
+
+**Required properties:**
+- Located inside `Buttons-cell` container alongside the menu button
+- SVG icon with viewBox `0 0 16 16` (16x16 size)
+- NOT inside `[data-name="MoreButton"]` container
+
+**Structure (February 2026):**
+```html
+<th data-testid="Base-table-cell">
+  <div class="Buttons-cell__xxx">
+    <!-- Chat button (first) -->
+    <div class="Switchable-portal-tooltip__xxx" role="button">
+      <span class="Portal-tooltip__text">
+        <button class="button__xxx onlyIcon__xxx">
+          <svg viewBox="0 0 16 16" height="16" width="16">...</svg>
+        </button>
+      </span>
+    </div>
+    <!-- Menu button (second) -->
+    <div role="button">
+      <div data-name="MoreButton">
+        <button><svg viewBox="-10 -3 24 24" height="24" width="24">...</svg></button>
+      </div>
+    </div>
+  </div>
+</th>
+```
+
+**Three states:**
+
+| State | Visual | HTML | Action |
+|-------|--------|------|--------|
+| Grey (new) | Grey icon | `button:not([disabled])` with one set of CSS classes | Click — opens new chat tab |
+| Black (existing) | Black icon | `button:not([disabled])` with different CSS classes | Click — opens existing chat tab |
+| Transparent (disabled) | Faded icon | `button[disabled]`, wrapped in tooltip | Skip — feature not enabled for cabinet |
+
+**Identification strategy:**
+1. In `Buttons-cell`, find all buttons with SVG
+2. Select the one where SVG `viewBox` = `"0 0 16 16"` (NOT containing `"-10"`)
+3. Or: select button NOT inside `[data-name="MoreButton"]`
+
+**State detection strategy (February 2026):**
+- **Disabled:** `button.hasAttribute('disabled')` → `chat_not_activated`
+- **Grey vs Black:** CSS classes are hashed and unstable. Use computed color luminance:
+  1. `getComputedStyle(button).color` → parse RGB
+  2. Luminance = `0.2126*R + 0.7152*G + 0.0722*B` (R,G,B normalized 0-1)
+  3. Luminance < 0.4 → dark/black → `chat_opened`
+  4. Luminance >= 0.4 → grey → `chat_available`
+- Threshold configurable in `selectors.catalog.js` → `CHAT_STATUS_DETECTION.luminanceThreshold`
+
+**MVP behavior:** Click ALL non-disabled chat buttons (grey AND black) to collect chat data.
+
+**Invariants:**
+- One chat button per row
+- Click opens a new browser tab with chat page
+- Disabled state via `disabled` attribute
+- CSS classes are hashed (unstable); use SVG viewBox for identification
+- Grey and disabled buttons share same class hashes; disabled has `disabled=""` attribute
+
+---
+
+## 2.17 Chat Page
+
+**What it represents:** The WB chat page opened after clicking the chat button.
+
+### URL Pattern
+
+```
+https://seller.wildberries.ru/chat-with-clients?chatId={UUID}
+```
+
+**Example:**
+```
+https://seller.wildberries.ru/chat-with-clients?chatId=a8775c6f-049b-da67-1045-421477a8bfcb
+```
+
+**Properties:**
+- Domain: `seller.wildberries.ru` (same as reviews page)
+- Path: `/chat-with-clients`
+- Query: `chatId` = UUID format
+- chatId extractable via: `/chatId=([a-f0-9-]+)/i`
+
+### Messages List
+
+**Structure (February 2026):**
+```html
+<section class="ChatWindow__messages__xxx">
+  <ul class="ChatWindow__list__xxx">
+    <!-- Date badge -->
+    <li class="ChatWindow__date__xxx">
+      <div data-testid="date-badge">
+        <div data-name="Chips">11 февраля</div>
+      </div>
+    </li>
+    <!-- Message -->
+    <li class="ChatWindow__list-element__xxx" data-addtime="1770818484914" data-count="1">
+      <section data-testid="message">
+        <div data-testid="message-content">
+          <div class="Message__text__xxx">
+            <span data-name="Text">Чат с покупателем по товару 341213496</span>
+          </div>
+          <div class="Message__time__xxx">
+            <span data-name="Text">17:01</span>
+          </div>
+        </div>
+      </section>
+    </li>
+  </ul>
+</section>
+```
+
+**Stable selectors:**
+- Message: `[data-testid="message"]`
+- Content: `[data-testid="message-content"]`
+- Text: `span[data-name="Text"]`
+- Date badge: `[data-testid="date-badge"]`
+- Message item: `li[data-addtime]`
+
+### System Anchor Message
+
+**What it is:** First auto-generated message in chat, linking chat to product.
+
+**Format:** `"Чат с покупателем по товару {nmId}"`
+
+**Identification:**
+- regex: `/товару\s+(\d+)/i` — extracts nmId
+- validation: `/(?:чат|покупател|товар)/i` — confirms it's the system message
+- It's typically the first `[data-testid="message"]` with lowest `data-addtime`
+
+**Algorithm to find:**
+1. Scan all messages in current DOM
+2. If not found — scroll up
+3. Re-scan after each scroll
+4. Stop when found OR reached top of history
+
+### Message Input (Sprint 2)
+
+**Structure:**
+```html
+<div data-name="TextAreaInput">
+  <textarea id="messageInput" name="messageInput" placeholder="Сообщение..."></textarea>
+</div>
+```
+
+**Stable selectors:**
+- Container: `[data-name="TextAreaInput"]`
+- Input: `#messageInput` or `textarea[name="messageInput"]`
+- Placeholder: `"Сообщение..."`
+
+**Invariants:**
+- React controlled component (same handling as complaint textarea)
+- Must use events to trigger React state update
+
+---
+
 ## 3. Assumptions and Invariants
 
 ### 3.1 Page Load State
@@ -510,6 +668,7 @@ WB UI changes frequently. When updating selectors:
 
 When UI breaks, verify these elements in order:
 
+**Reviews page (complaints):**
 1. **Reviews Table** - Is the table container class still valid?
 2. **Review Rows** - Are rows identified correctly?
 3. **Menu Button** - Is the SVG viewBox still "-10"?
@@ -519,6 +678,18 @@ When UI breaks, verify these elements in order:
 7. **Textarea** - Is the ID still "explanation"?
 8. **Submit Button** - Is the button container class valid?
 9. **Pagination** - Are there still 4 buttons at correct positions?
+
+**Reviews page (chat workflow):**
+10. **Chat Button** - Is the SVG viewBox still "0 0 16 16"?
+11. **Buttons-cell** - Are chat and menu buttons still in the same container?
+12. **Chat button disabled** - Is `disabled` attribute still used?
+
+**Chat page:**
+13. **URL format** - Is it still `/chat-with-clients?chatId={UUID}`?
+14. **Messages** - Is `data-testid="message"` still present?
+15. **Message text** - Is `span[data-name="Text"]` still used?
+16. **System message** - Does it still say "Чат с покупателем по товару {nmId}"?
+17. **Input** - Is `#messageInput` still the textarea ID?
 
 ---
 
@@ -534,6 +705,7 @@ When UI breaks, verify these elements in order:
 | DateTime | `span[data-name="Text"]` + pattern | Container class |
 | Statuses | `[data-name="Chips"]` | Text matching |
 | Menu Button | SVG viewBox "-10" | `More-button` class |
+| Chat Button | SVG viewBox "0 0 16 16" + `:not([disabled])` | 1st button not in `MoreButton` |
 | Dropdown | `[class*="Dropdown-list"]` | `role="menu"` |
 | Complaint Btn | Text "Пожаловаться на отзыв" | 2nd warning button |
 | Modal | `[class*="Complaint-form"]` | Form with radio+textarea |
@@ -541,3 +713,10 @@ When UI breaks, verify these elements in order:
 | Submit | Container class | Text "Отправить" |
 | Search | `placeholder*="Поиск"` | `type="search"` |
 | Pagination | `[class*="Token-pagination__arrow"][2]` | Fixed position |
+| **Chat page** | | |
+| Chat URL | `url.includes('/chat-with-clients')` | — |
+| Chat ID | `/chatId=([a-f0-9-]+)/i` | — |
+| Messages | `[data-testid="message"]` | `li[data-addtime]` |
+| Message text | `[data-testid="message-content"] span[data-name="Text"]` | — |
+| Anchor msg | regex `/товару\s+(\d+)/i` | `/(?:чат\|покупател\|товар)/i` |
+| Chat input | `#messageInput` | `[data-name="TextAreaInput"] textarea` |

@@ -421,6 +421,104 @@ When `TEST_MODE = true`:
 
 ---
 
+## 3b. Unified Tasks Workflow (v4.0)
+
+### 3b.1 Overview
+
+Replaces the old `getComplaints` → `test4Diagnostics` flow with a unified `getTasks` → `runTaskWorkflow` flow. The backend decides what needs to be done; the extension just executes.
+
+**Entry Point:** `diagnostic.html` → `diagnostic.js:submitTasks()`
+
+**Core Handler:** `OptimizedHandler.runTaskWorkflow(options)` (main world)
+
+### 3b.2 Task Types
+
+| Type | Action | Backend decides |
+|------|--------|----------------|
+| statusParses | Parse review statuses on page | Which articles to visit |
+| chatOpens | Click chat button (type: "open" or "link") | Which reviews need chat |
+| complaints | Submit complaint via WB modal | Which reviews need complaint |
+
+### 3b.3 Multi-Round Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    UNIFIED TASKS WORKFLOW (v4.0)                         │
+└─────────────────────────────────────────────────────────────────────────┘
+
+Constants:
+- MAX_ROUNDS = 50 (safety cap)
+- Limits from API: maxComplaintsPerRun, cooldownBetweenComplaintsMs, cooldownBetweenChatsMs
+
+Flow:
+┌─────────────────────────────────────────────────────────────────────────┐
+│  ROUND 1                                                                 │
+│  ├── GET /api/extension/stores/{storeId}/tasks                         │
+│  ├── IF totals sum = 0 → EXIT with SUCCESS                            │
+│  ├── Send runTaskWorkflow to WB tab                                    │
+│  │   ├── For each article:                                             │
+│  │   │   ├── Search on WB page                                        │
+│  │   │   ├── Scan pages, per row:                                      │
+│  │   │   │   ├── statusParses: collect ALL reviews for sync            │
+│  │   │   │   ├── chatOpens: if matched → open/link chat               │
+│  │   │   │   └── complaints: if matched → submit complaint            │
+│  │   │   └── After page: sync statuses to backend                     │
+│  │   └── Return round report                                          │
+│  └── Accumulate stats                                                  │
+├─────────────────────────────────────────────────────────────────────────┤
+│  ROUND 2...N                                                            │
+│  ├── GET /tasks → processed tasks excluded by backend                  │
+│  └── Repeat until totals = 0                                           │
+├─────────────────────────────────────────────────────────────────────────┤
+│  EXIT CONDITIONS:                                                        │
+│  ├── API returns totals sum = 0 → SUCCESS                              │
+│  ├── Round 50 reached → WARNING                                        │
+│  ├── User cancelled → CANCELLED                                        │
+│  └── Error occurred → ERROR                                            │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### 3b.4 Per-Row Processing Order
+
+Within each review row on a page:
+
+1. **statusParses** (passive): Collect review data for sync — always happens
+2. **chatOpens**: If row matches chatOpensMap → `ChatService.openChat()` or link chat
+3. **complaints**: If row matches complaintsMap and no blocking status → `ComplaintService.submitComplaint()`
+
+### 3b.5 Key Matching
+
+Backend provides `reviewKey` in format `{nmId}_{rating}_{YYYY-MM-DDTHH:mm}`.
+Extension normalizes DOM-parsed keys to the same format via `normalizeReviewKey()`.
+Match is exact string comparison.
+
+### 3b.6 Report Shape
+
+```javascript
+{
+  mode: 'tasks',
+  totalReviewsSynced: 150,
+  chatsOpened: 12,
+  chatErrors: 1,
+  complaintsSubmitted: 45,
+  complaintsSkipped: 3,
+  complaintsErrors: 2,
+  tabSwitches: 5,
+  cancelled: false,
+  articleResults: [...],
+  overallStatus: 'COMPLETED'
+}
+```
+
+### 3b.7 Backward Compatibility
+
+Old flow (`getComplaints` → `test4Diagnostics`) is **not removed**. It still works via:
+- `OptimizedHandler.runTest4Diagnostics()` — unchanged
+- `pilotAPI.getComplaints()` — unchanged
+- Old bridge handlers in `content.js` — unchanged
+
+---
+
 ## 4. Error Handling and Retry Behavior
 
 ### 4.1 Menu Open Retry
@@ -506,9 +604,10 @@ if (result === "NEED_RELOAD") {
 
 | Limit | Value | Configurable | Location |
 |-------|-------|--------------|----------|
-| Max rounds per session | 10 | Yes | diagnostic.js:18 |
-| Complaints per round | 300 | Yes | diagnostic.js:19 |
-| Max complaints per session | 3000 | Calculated | 10 × 300 |
+| Max rounds per session | 50 | Yes | diagnostic.js:11 |
+| Complaints per round | API-defined | Yes | tasks.limits.maxComplaintsPerRun |
+| Cooldown between complaints | API-defined | Yes | tasks.limits.cooldownBetweenComplaintsMs |
+| Cooldown between chats | API-defined | Yes | tasks.limits.cooldownBetweenChatsMs |
 | Max pages per article | 10 | Yes | optimized-handler.js |
 | Status sync batch size | 100 | Yes | status-sync-service.js |
 | Sync timeout | 30s | Yes | optimized-handler.js |

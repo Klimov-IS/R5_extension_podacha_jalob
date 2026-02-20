@@ -311,7 +311,8 @@ Content-Type: application/json
       "rating": 1,
       "reviewDate": "2026-01-07T20:09:37.000Z",
       "statuses": ["Жалоба отклонена", "Выкуп"],
-      "canSubmitComplaint": false
+      "canSubmitComplaint": false,
+      "chatStatus": "chat_opened"
     }
   ]
 }
@@ -335,6 +336,7 @@ Content-Type: application/json
 | reviewDate | string | Yes | Review date (ISO 8601) |
 | statuses | array | Yes | Array of status strings from WB UI |
 | canSubmitComplaint | boolean | Yes | Whether new complaint can be submitted |
+| chatStatus | string\|null | No | Chat button state: `"chat_not_activated"` / `"chat_available"` / `"chat_opened"` / `null` |
 
 **Key Normalization:**
 The reviewKey timestamp is normalized to remove seconds:
@@ -351,8 +353,12 @@ The reviewKey timestamp is normalized to remove seconds:
     "received": 50,
     "created": 30,
     "updated": 20,
-    "errors": 0
-  }
+    "errors": 0,
+    "synced": 15,
+    "chatStatusSynced": 42,
+    "syncErrors": 0
+  },
+  "message": "Статусы успешно синхронизированы"
 }
 ```
 
@@ -364,6 +370,20 @@ The reviewKey timestamp is normalized to remove seconds:
 | created | number | New status records created |
 | updated | number | Existing records updated |
 | errors | number | Records that failed to process |
+| synced | number | Reviews matched and synced with main reviews table |
+| chatStatusSynced | number | Reviews where `chat_status_by_review` was updated |
+| syncErrors | number | Errors during sync with main reviews table |
+
+**chatStatus Mapping (extension → DB):**
+
+| Extension sends | DB stores (ENUM) |
+|----------------|------------------|
+| `chat_not_activated` | `unavailable` |
+| `chat_available` | `available` |
+| `chat_opened` | `opened` |
+| `null` | `unknown` |
+
+**Matching logic:** Backend matches by `store_id + product_id + rating + DATE_TRUNC('minute', review_date)`.
 
 **Batch Limit:** Maximum 100 reviews per request.
 
@@ -387,6 +407,227 @@ GET /api/health
   "timestamp": "2026-01-28T12:00:00.000Z"
 }
 ```
+
+---
+
+### 2.6 Chat API — Get Chat Rules
+
+Retrieve chat opening rules for a store's products. Used by merged workflow to decide which reviews need chat opening.
+
+**Endpoint:**
+```
+GET /api/extension/chat/stores/{storeId}/rules
+```
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "storeId": "store_123",
+  "globalLimits": {
+    "maxChatsPerRun": 50,
+    "cooldownBetweenChatsMs": 3000
+  },
+  "items": [
+    {
+      "nmId": "649502497",
+      "productTitle": "Футболка мужская",
+      "isActive": true,
+      "chatEnabled": true,
+      "starsAllowed": [1, 2, 3],
+      "requiredComplaintStatus": "rejected"
+    }
+  ]
+}
+```
+
+**Usage:** `src/services/chat-api.js:getChatRules()`
+
+---
+
+### 2.7 Chat API — Register Chat Opened
+
+Register that the extension opened a chat tab for a review. Idempotent (UPSERT by store_id + review_key).
+
+**Endpoint:**
+```
+POST /api/extension/chat/opened
+```
+
+**Request Body:**
+```json
+{
+  "storeId": "store_123",
+  "reviewContext": {
+    "nmId": "649502497",
+    "rating": 1,
+    "reviewDate": "2026-01-07T20:09:37.000Z",
+    "reviewKey": "649502497_1_2026-01-07T20:09"
+  },
+  "chatUrl": "https://seller.wildberries.ru/chat-with-clients?chatId=a8775c6f-049b-da67-1045-421477a8bfcb",
+  "openedAt": "2026-02-19T14:30:00.000Z",
+  "status": "CHAT_OPENED"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "chatRecordId": "uuid-here",
+  "reviewMatched": true,
+  "message": "Chat record created"
+}
+```
+
+**HTTP Status:** 201 (new) or 200 (existing UPSERT).
+
+**Usage:** `src/services/chat-api.js:chatOpened()`
+
+---
+
+### 2.8 Chat API — Send Anchor Data
+
+Send parsed system anchor message from the chat tab.
+
+**Endpoint:**
+```
+POST /api/extension/chat/{chatRecordId}/anchor
+```
+
+**Request Body:**
+```json
+{
+  "systemMessageText": "Чат с покупателем по товару 649502497",
+  "parsedNmId": "649502497",
+  "parsedProductTitle": "",
+  "anchorFoundAt": "2026-02-19T14:30:05.000Z",
+  "status": "ANCHOR_FOUND"
+}
+```
+
+**Status values:** `ANCHOR_FOUND`, `ANCHOR_NOT_FOUND`
+
+**Usage:** `src/services/chat-api.js:sendAnchor()`
+
+---
+
+### 2.9 Chat API — Log Error
+
+Log an error during chat workflow processing.
+
+**Endpoint:**
+```
+POST /api/extension/chat/{chatRecordId}/error
+```
+
+**Request Body:**
+```json
+{
+  "errorCode": "ERROR_TAB_TIMEOUT",
+  "errorMessage": "Chat tab not detected within 10s",
+  "stage": "TAB_DETECTION",
+  "occurredAt": "2026-02-19T14:30:10.000Z"
+}
+```
+
+**Error Codes:** `ERROR_TAB_TIMEOUT`, `ERROR_ANCHOR_NOT_FOUND`, `ERROR_DOM_CHANGED`, `ERROR_SEND_FAILED`, `ERROR_UNKNOWN`
+
+**Usage:** `src/services/chat-api.js:logError()`
+
+---
+
+### 2.10 Get Unified Tasks (v4.0)
+
+Retrieve all pending tasks for a store in a single request. Replaces separate calls to `GET /complaints` and `GET /chat/rules`.
+
+**Endpoint:**
+```
+GET /api/extension/stores/{storeId}/tasks
+```
+
+**Headers:**
+```
+Authorization: Bearer {token}
+Content-Type: application/json
+```
+
+**Response:**
+```json
+{
+  "storeId": "store_123",
+  "articles": {
+    "649502497": {
+      "statusParses": [
+        { "reviewKey": "649502497_1_2026-01-07T20:09", "rating": 1 }
+      ],
+      "chatOpens": [
+        { "reviewKey": "649502497_2_2026-01-10T14:30", "rating": 2, "type": "open" },
+        { "reviewKey": "649502497_1_2026-01-07T20:09", "rating": 1, "type": "link" }
+      ],
+      "complaints": [
+        {
+          "reviewKey": "649502497_1_2026-01-07T20:09",
+          "rating": 1,
+          "reasonId": 16,
+          "reasonName": "Ненастоящий отзыв",
+          "complaintText": "Данный отзыв содержит недостоверную информацию..."
+        }
+      ]
+    }
+  },
+  "totals": {
+    "statusParses": 150,
+    "chatOpens": 42,
+    "complaints": 88
+  },
+  "limits": {
+    "maxComplaintsPerRun": 300,
+    "cooldownBetweenComplaintsMs": 1500,
+    "cooldownBetweenChatsMs": 2000
+  }
+}
+```
+
+**Task Types:**
+
+| Type | Description |
+|------|-------------|
+| statusParses | Reviews that need status parsing on WB page |
+| chatOpens | Chats to open/link. `type: "link"` = link existing chat, `type: "open"` = open new chat |
+| complaints | Complaints to submit via WB UI |
+
+**Response Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| storeId | string | Store identifier |
+| articles | object | Tasks grouped by article (nmId) |
+| totals | object | Total counts per task type |
+| limits | object | Processing limits and cooldowns |
+
+**reviewKey Format:** `{nmId}_{rating}_{YYYY-MM-DDTHH:mm}` — normalized (no seconds).
+
+**reasonId:** Number (11-20), not string. Extension converts to string for WB radio button matching.
+
+**Multi-round:** One GET = one round. Repeat until `totals` sum is 0. Backend excludes completed tasks from subsequent requests.
+
+**HTTP Status Codes:**
+
+| Code | Meaning |
+|------|---------|
+| 200 | Success |
+| 401 | Invalid or expired token |
+| 404 | Store not found |
+| 429 | Rate limit exceeded |
+
+**Usage:** `src/api/pilot-api.js:getTasks()`
+
+**Deprecates (not removed):** `GET /complaints` + `GET /chat/rules` — old endpoints remain for backward compatibility.
 
 ---
 

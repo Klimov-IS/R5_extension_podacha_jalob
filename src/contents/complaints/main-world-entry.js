@@ -31,6 +31,7 @@ import './services/search-service.js';      // window.SearchService
 import './services/navigation-service.js';  // window.NavigationService
 import './services/progress-service.js';    // window.ProgressService
 import './services/complaint-service.js';   // window.ComplaintService
+import './services/chat-service.js';        // window.ChatService
 
 // Handlers
 import './handlers/optimized-handler.js';   // window.OptimizedHandler
@@ -56,6 +57,7 @@ window.dispatchEvent(new CustomEvent('wb-content-bundle-ready', {
       'NavigationService',
       'ProgressService',
       'ComplaintService',
+      'ChatService',
       'OptimizedHandler'
     ]
   }
@@ -75,8 +77,15 @@ window.addEventListener('wb-call-main-world', async (event) => {
 
   try {
     if (action === 'runTest4Diagnostics') {
-      // Обработка жалоб с реальной подачей
+      // Обработка жалоб (legacy flow)
       const report = await window.OptimizedHandler.runTest4Diagnostics(data);
+
+      window.dispatchEvent(new CustomEvent('wb-main-world-response', {
+        detail: { requestId, success: true, data: report }
+      }));
+    } else if (action === 'runTaskWorkflow') {
+      // Unified Tasks workflow (statusParses + chatOpens + complaints)
+      const report = await window.OptimizedHandler.runTaskWorkflow(data);
 
       window.dispatchEvent(new CustomEvent('wb-main-world-response', {
         detail: { requestId, success: true, data: report }

@@ -1,14 +1,13 @@
 /**
- * Diagnostic Tool - Подача жалоб v3.0
+ * Diagnostic Tool - Unified Tasks v4.0
  *
- * @version 3.0.0 - Minimal UI redesign
- * @since 02.02.2026
+ * @version 4.0.0 - Unified Tasks API migration
+ * @since 19.02.2026
  */
 
 'use strict';
 
 // Настройки многораундовой обработки
-const COMPLAINTS_PER_ROUND = 300;
 const MAX_ROUNDS_SAFETY = 50; // Safety cap против бесконечного цикла
 
 // ========================================================================
@@ -16,7 +15,7 @@ const MAX_ROUNDS_SAFETY = 50; // Safety cap против бесконечног�
 // ========================================================================
 
 const storeSelect = document.getElementById('store-select');
-const btnGetComplaints = document.getElementById('btn-get-complaints');
+const btnGetTasks = document.getElementById('btn-get-complaints'); // HTML ID сохранён
 const btnSubmit = document.getElementById('btn-submit');
 const complaintsInfo = document.getElementById('complaints-info');
 const complaintsCountEl = document.getElementById('complaints-count');
@@ -32,7 +31,7 @@ const previewAccordion = document.getElementById('preview-accordion');
 const btnRefreshStores = document.getElementById('btn-refresh-stores');
 
 // Состояние
-let loadedComplaints = [];
+let loadedTasks = null; // { storeId, articles, totals, limits }
 let currentStoreId = null;
 
 // ========================================================================
@@ -40,6 +39,9 @@ let currentStoreId = null;
 // ========================================================================
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // Обновляем текст кнопок для Tasks UI
+  btnGetTasks.textContent = '📥 Получить задачи';
+  btnSubmit.textContent = '▶️ Запустить';
   await loadStores();
 });
 
@@ -110,7 +112,7 @@ btnRefreshStores.addEventListener('click', async () => {
 
 storeSelect.addEventListener('change', () => {
   const hasSelection = storeSelect.value !== '';
-  btnGetComplaints.disabled = !hasSelection;
+  btnGetTasks.disabled = !hasSelection;
 
   // Сбрасываем состояние при смене магазина
   if (hasSelection) {
@@ -119,18 +121,17 @@ storeSelect.addEventListener('change', () => {
     hidePreview();
     complaintsInfo.classList.add('hidden');
     btnSubmit.disabled = true;
-    loadedComplaints = [];
-
+    loadedTasks = null;
   }
 });
 
 // ========================================================================
-// ПОЛУЧЕНИЕ ЖАЛОБ
+// ПОЛУЧЕНИЕ ЗАДАЧ (Unified Tasks API)
 // ========================================================================
 
-btnGetComplaints.addEventListener('click', getComplaints);
+btnGetTasks.addEventListener('click', getTasks);
 
-async function getComplaints() {
+async function getTasks() {
   const storeId = storeSelect.value;
 
   if (!storeId) {
@@ -145,67 +146,73 @@ async function getComplaints() {
 
   // Блокируем UI
   storeSelect.disabled = true;
-  btnGetComplaints.disabled = true;
-  btnGetComplaints.textContent = '⏳ Загрузка...';
+  btnGetTasks.disabled = true;
+  btnGetTasks.textContent = '⏳ Загрузка...';
   hideError();
   hideResults();
 
   try {
     const apiResponse = await chrome.runtime.sendMessage({
-      type: 'getComplaints',
-      storeId: storeId,
-      skip: 0,
-      take: 300
+      type: 'getTasks',
+      storeId: storeId
     });
 
     if (!apiResponse || apiResponse.error) {
-      throw new Error(apiResponse?.error || 'Не удалось получить жалобы от API');
+      throw new Error(apiResponse?.error || 'Не удалось получить задачи от API');
     }
 
-    loadedComplaints = apiResponse.data || [];
+    loadedTasks = apiResponse.data;
 
-    if (loadedComplaints.length === 0) {
-      throw new Error('Нет жалоб для обработки. Убедитесь что в системе есть жалобы со статусом "draft".');
+    const totals = loadedTasks.totals || {};
+    const totalCount = (totals.statusParses || 0) + (totals.chatOpens || 0) + (totals.complaints || 0);
+
+    if (totalCount === 0) {
+      throw new Error('Нет задач для обработки. Все задачи уже выполнены.');
     }
 
     // Показываем счётчик
-    complaintsCountEl.textContent = loadedComplaints.length;
+    complaintsCountEl.textContent = totalCount;
     complaintsInfo.classList.remove('hidden');
     btnSubmit.disabled = false;
 
     // Показываем превью
-    showPreview(loadedComplaints);
+    showPreview(loadedTasks);
 
   } catch (error) {
     console.error('[Diagnostic] Ошибка:', error);
     showError(error.message);
   } finally {
     storeSelect.disabled = false;
-    btnGetComplaints.disabled = false;
-    btnGetComplaints.textContent = '📥 Получить жалобы';
+    btnGetTasks.disabled = false;
+    btnGetTasks.textContent = '📥 Получить задачи';
   }
 }
 
 // ========================================================================
-// ПОДАЧА ЖАЛОБ
+// ЗАПУСК ОБРАБОТКИ ЗАДАЧ
 // ========================================================================
 
-btnSubmit.addEventListener('click', submitComplaints);
+btnSubmit.addEventListener('click', submitTasks);
 
-async function submitComplaints() {
-  if (loadedComplaints.length === 0) {
-    showError('Сначала получите жалобы');
+async function submitTasks() {
+  if (!loadedTasks) {
+    showError('Сначала получите задачи');
     return;
   }
+
+  const totals = loadedTasks.totals || {};
 
   // Подтверждение
   const storeName = storeSelect.options[storeSelect.selectedIndex].textContent;
   const confirmed = confirm(
-    `ВНИМАНИЕ! РЕАЛЬНАЯ ПОДАЧА ЖАЛОБ!\n\n` +
-    `Магазин: ${storeName}\n` +
-    `Первая порция: ${loadedComplaints.length} жалоб\n\n` +
-    `Система будет запрашивать жалобы порциями по ${COMPLAINTS_PER_ROUND},\n` +
-    `пока API не вернёт меньше ${COMPLAINTS_PER_ROUND} (все обработаны).\n\n` +
+    `ВНИМАНИЕ! РЕАЛЬНАЯ ОБРАБОТКА ЗАДАЧ!\n\n` +
+    `Магазин: ${storeName}\n\n` +
+    `Задачи первого раунда:\n` +
+    `  • Парсинг статусов: ${totals.statusParses || 0}\n` +
+    `  • Открытие чатов: ${totals.chatOpens || 0}\n` +
+    `  • Подача жалоб: ${totals.complaints || 0}\n\n` +
+    `Система будет запрашивать задачи порциями,\n` +
+    `пока API не вернёт 0 задач (все обработаны).\n\n` +
     `Перед ПЕРВОЙ жалобой вы увидите заполненную форму для проверки.\n\n` +
     `Продолжить?`
   );
@@ -216,9 +223,9 @@ async function submitComplaints() {
 
   // Блокируем UI
   storeSelect.disabled = true;
-  btnGetComplaints.disabled = true;
+  btnGetTasks.disabled = true;
   btnSubmit.disabled = true;
-  btnSubmit.textContent = '⏳ Подача...';
+  btnSubmit.textContent = '⏳ Обработка...';
   hideError();
   hidePreview(); // Memory: очищаем превью (большой HTML)
   previewAccordion.innerHTML = '';
@@ -227,14 +234,14 @@ async function submitComplaints() {
   // Накопительная статистика за все раунды
   const totalStats = {
     rounds: 0,
-    complaintsReceived: 0,
-    reviewsFound: 0,
     totalReviewsSynced: 0,
-    canSubmitComplaint: 0,
-    submitted: 0,
-    alreadyProcessed: 0,
-    errors: 0,
+    chatsOpened: 0,
+    chatErrors: 0,
+    complaintsSubmitted: 0,
+    complaintsSkipped: 0,
+    complaintsErrors: 0,
     uniqueArticles: new Set(),
+    tabSwitches: 0,
     overallStatus: 'COMPLETED'
   };
 
@@ -266,14 +273,12 @@ async function submitComplaints() {
     let round = 1;
 
     while (round <= MAX_ROUNDS_SAFETY) {
-      updateProgress(10 + (round - 1) * 2, `Раунд ${round}: Получение жалоб...`);
+      updateProgress(10 + (round - 1) * 2, `Раунд ${round}: Получение задач...`);
 
-      // 3. Запросить жалобы от API
+      // 3. Запросить задачи от API
       const apiResponse = await chrome.runtime.sendMessage({
-        type: 'getComplaints',
-        storeId: currentStoreId,
-        skip: 0,
-        take: COMPLAINTS_PER_ROUND
+        type: 'getTasks',
+        storeId: currentStoreId
       });
 
       if (!apiResponse || apiResponse.error) {
@@ -282,20 +287,25 @@ async function submitComplaints() {
         break;
       }
 
-      const complaints = apiResponse.data || [];
+      const tasks = apiResponse.data;
+      const roundTotals = tasks.totals || {};
+      const roundTotal = (roundTotals.statusParses || 0) + (roundTotals.chatOpens || 0) + (roundTotals.complaints || 0);
 
-      // Условие выхода: 0 жалоб
-      if (complaints.length === 0) {
-        totalStats.overallStatus = 'SUCCESS: Все жалобы обработаны';
+      // Условие выхода: 0 задач
+      if (roundTotal === 0) {
+        totalStats.overallStatus = 'SUCCESS: Все задачи обработаны';
         break;
       }
 
-      updateProgress(15 + (round - 1) * 2, `Раунд ${round}: Обработка ${complaints.length} жалоб...`);
+      updateProgress(
+        15 + (round - 1) * 2,
+        `Раунд ${round}: Обработка ${roundTotal} задач (парсинг: ${roundTotals.statusParses || 0}, чаты: ${roundTotals.chatOpens || 0}, жалобы: ${roundTotals.complaints || 0})...`
+      );
 
       // 4. Отправить на обработку в WB вкладку
       const response = await chrome.tabs.sendMessage(wbTab.id, {
-        type: 'test4Diagnostics',
-        complaints: complaints,
+        type: 'runTaskWorkflow',
+        tasks: tasks,
         storeId: currentStoreId
       });
 
@@ -309,13 +319,13 @@ async function submitComplaints() {
 
       // 5. Накопить статистику
       totalStats.rounds++;
-      totalStats.complaintsReceived += roundReport.complaintsReceived || 0;
-      totalStats.reviewsFound += roundReport.reviewsFound || 0;
       totalStats.totalReviewsSynced += roundReport.totalReviewsSynced || 0;
-      totalStats.canSubmitComplaint += roundReport.canSubmitComplaint || 0;
-      totalStats.submitted += roundReport.submitted || 0;
-      totalStats.alreadyProcessed += roundReport.alreadyProcessed || 0;
-      totalStats.errors += roundReport.errors || 0;
+      totalStats.chatsOpened += roundReport.chatsOpened || 0;
+      totalStats.chatErrors += roundReport.chatErrors || 0;
+      totalStats.complaintsSubmitted += roundReport.complaintsSubmitted || 0;
+      totalStats.complaintsSkipped += roundReport.complaintsSkipped || 0;
+      totalStats.complaintsErrors += roundReport.complaintsErrors || 0;
+      totalStats.tabSwitches += roundReport.tabSwitches || 0;
 
       // Собираем уникальные артикулы
       if (roundReport.articleResults && Array.isArray(roundReport.articleResults)) {
@@ -325,12 +335,6 @@ async function submitComplaints() {
       // Если раунд был отменён
       if (roundReport.cancelled) {
         totalStats.overallStatus = 'CANCELLED: Прервано пользователем';
-        break;
-      }
-
-      // Условие выхода: API вернул меньше лимита — это была последняя порция
-      if (complaints.length < COMPLAINTS_PER_ROUND) {
-        totalStats.overallStatus = 'SUCCESS: Все жалобы обработаны';
         break;
       }
 
@@ -353,14 +357,14 @@ async function submitComplaints() {
     hideProgress();
     displayResults({
       rounds: totalStats.rounds,
-      complaintsReceived: totalStats.complaintsReceived,
-      reviewsFound: totalStats.reviewsFound,
       totalReviewsSynced: totalStats.totalReviewsSynced,
-      canSubmitComplaint: totalStats.canSubmitComplaint,
-      submitted: totalStats.submitted,
-      alreadyProcessed: totalStats.alreadyProcessed,
-      errors: totalStats.errors,
+      chatsOpened: totalStats.chatsOpened,
+      chatErrors: totalStats.chatErrors,
+      complaintsSubmitted: totalStats.complaintsSubmitted,
+      complaintsSkipped: totalStats.complaintsSkipped,
+      complaintsErrors: totalStats.complaintsErrors,
       uniqueArticles: totalStats.uniqueArticles.size,
+      tabSwitches: totalStats.tabSwitches,
       overallStatus: totalStats.overallStatus
     });
 
@@ -369,8 +373,8 @@ async function submitComplaints() {
     hideProgress();
     showError(error.message);
   } finally {
-    // Memory cleanup: очищаем загруженные жалобы (уже отправлены в WB tab)
-    loadedComplaints = [];
+    // Memory cleanup
+    loadedTasks = null;
     totalStats.uniqueArticles.clear();
     resetUI();
   }
@@ -412,57 +416,101 @@ function hidePreview() {
   previewCard.classList.remove('active');
 }
 
-function showPreview(complaints) {
-  // Группируем по артикулам
-  const byArticle = {};
-  complaints.forEach(c => {
-    const articleId = c.productId || c.nmId || 'unknown';
-    if (!byArticle[articleId]) {
-      byArticle[articleId] = [];
-    }
-    byArticle[articleId].push(c);
-  });
+function showPreview(tasks) {
+  const articles = tasks.articles || {};
+  const totals = tasks.totals || {};
 
-  // Генерируем HTML аккордеона
   let html = '';
-  for (const [articleId, articleComplaints] of Object.entries(byArticle)) {
+
+  for (const [articleId, articleTasks] of Object.entries(articles)) {
+    const statusParses = articleTasks.statusParses || [];
+    const chatOpens = articleTasks.chatOpens || [];
+    const complaints = articleTasks.complaints || [];
+    const articleTotal = statusParses.length + chatOpens.length + complaints.length;
+
     html += `
       <div class="accordion-item">
         <div class="accordion-header">
           <div class="accordion-header-left">
             <span class="accordion-article">Артикул: ${articleId}</span>
-            <span class="accordion-count">${articleComplaints.length} жалоб</span>
+            <span class="accordion-count">${articleTotal} задач</span>
           </div>
           <span class="accordion-arrow">▼</span>
         </div>
         <div class="accordion-content">
     `;
 
-    articleComplaints.forEach(c => {
-      const date = c.reviewDate ? new Date(c.reviewDate).toLocaleDateString('ru-RU') : 'N/A';
-      const rating = c.rating || 0;
-      const category = c.complaintData?.reasonName || c.reasonName || 'Не указана';
-      const text = c.complaintData?.complaintText || c.complaintText || '';
-      const reviewId = c.reviewId || c.id || '—';
-
-      html += `
-        <div class="complaint-item">
-          <div class="complaint-row">
-            <span class="complaint-rating">${'⭐'.repeat(rating) || '—'}</span>
-            <span class="complaint-date">${date}</span>
-            <span class="complaint-category">${category}</span>
-            <span class="complaint-review-id">ID: ${reviewId}</span>
+    // Парсинг статусов
+    if (statusParses.length > 0) {
+      html += `<div class="complaint-item" style="background:#f0f9ff; padding:10px 16px;">
+        <strong style="color:#0284c7;">🔍 Парсинг статусов: ${statusParses.length}</strong>
+      </div>`;
+      statusParses.forEach(sp => {
+        html += `
+          <div class="complaint-item">
+            <div class="complaint-row">
+              <span class="complaint-rating">${'⭐'.repeat(sp.rating || 0) || '—'}</span>
+              <span class="complaint-date">${sp.reviewKey || '—'}</span>
+            </div>
           </div>
-          ${text ? `<div class="complaint-text">${escapeHtml(text)}</div>` : ''}
-        </div>
-      `;
-    });
+        `;
+      });
+    }
+
+    // Чаты
+    if (chatOpens.length > 0) {
+      html += `<div class="complaint-item" style="background:#f0fdf4; padding:10px 16px;">
+        <strong style="color:#059669;">💬 Чаты: ${chatOpens.length}</strong>
+      </div>`;
+      chatOpens.forEach(ch => {
+        const typeLabel = ch.type === 'link' ? '🔗 привязка' : '📨 открытие';
+        html += `
+          <div class="complaint-item">
+            <div class="complaint-row">
+              <span class="complaint-rating">${'⭐'.repeat(ch.rating || 0) || '—'}</span>
+              <span class="complaint-date">${ch.reviewKey || '—'}</span>
+              <span class="complaint-category">${typeLabel}</span>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    // Жалобы
+    if (complaints.length > 0) {
+      html += `<div class="complaint-item" style="background:#fef2f2; padding:10px 16px;">
+        <strong style="color:#dc2626;">📝 Жалобы: ${complaints.length}</strong>
+      </div>`;
+      complaints.forEach(c => {
+        const reasonName = c.reasonName || `Причина #${c.reasonId}`;
+        html += `
+          <div class="complaint-item">
+            <div class="complaint-row">
+              <span class="complaint-rating">${'⭐'.repeat(c.rating || 0) || '—'}</span>
+              <span class="complaint-date">${c.reviewKey || '—'}</span>
+              <span class="complaint-category">${reasonName}</span>
+            </div>
+            ${c.complaintText ? `<div class="complaint-text">${escapeHtml(c.complaintText)}</div>` : ''}
+          </div>
+        `;
+      });
+    }
 
     html += `
         </div>
       </div>
     `;
   }
+
+  // Итого по типам
+  html += `
+    <div style="margin-top:12px; padding:12px 16px; background:#f9fafb; border-radius:10px; font-size:13px; color:#6b7280;">
+      <strong>Итого:</strong>
+      🔍 Парсинг: ${totals.statusParses || 0} •
+      💬 Чаты: ${totals.chatOpens || 0} •
+      📝 Жалобы: ${totals.complaints || 0}
+    </div>
+  `;
 
   previewAccordion.innerHTML = html;
   previewCard.classList.add('active');
@@ -487,10 +535,10 @@ function escapeHtml(text) {
 
 function resetUI() {
   storeSelect.disabled = false;
-  btnGetComplaints.disabled = false;
-  btnGetComplaints.textContent = '📥 Получить жалобы';
-  btnSubmit.disabled = loadedComplaints.length === 0;
-  btnSubmit.textContent = '▶️ Подать жалобы';
+  btnGetTasks.disabled = false;
+  btnGetTasks.textContent = '📥 Получить задачи';
+  btnSubmit.disabled = !loadedTasks;
+  btnSubmit.textContent = '▶️ Запустить';
 }
 
 // ========================================================================
@@ -508,52 +556,52 @@ function displayResults(report) {
       statusText: 'Выполнено'
     },
     {
-      label: 'Жалоб получено из API',
-      value: report.complaintsReceived || 0,
-      status: 'info',
-      statusText: 'Загружено'
-    },
-    {
       label: 'Уникальных артикулов',
       value: report.uniqueArticles || 0,
       status: 'info',
       statusText: 'Обработано'
     },
     {
-      label: 'Отзывов найдено на WB',
-      value: report.reviewsFound || 0,
-      status: 'info',
-      statusText: 'Спарсено'
-    },
-    {
-      label: 'Отзывов синхронизировано в БД',
+      label: 'Отзывов синхронизировано (статусы)',
       value: report.totalReviewsSynced || 0,
       status: 'info',
       statusText: 'Синхронизировано'
     },
     {
-      label: 'Совпадений (жалоба ↔ отзыв)',
-      value: report.canSubmitComplaint || 0,
-      status: report.canSubmitComplaint > 0 ? 'success' : 'warning',
-      statusText: report.canSubmitComplaint > 0 ? 'Найдено' : 'Не найдено'
+      label: 'Чатов открыто',
+      value: report.chatsOpened || 0,
+      status: report.chatsOpened > 0 ? 'success' : 'info',
+      statusText: report.chatsOpened > 0 ? 'Успешно' : 'Нет'
+    },
+    {
+      label: 'Ошибки чатов',
+      value: report.chatErrors || 0,
+      status: report.chatErrors > 0 ? 'error' : 'success',
+      statusText: report.chatErrors > 0 ? 'Ошибка' : 'Нет ошибок'
     },
     {
       label: 'Жалоб подано успешно',
-      value: report.submitted || 0,
-      status: report.submitted > 0 ? 'success' : 'warning',
-      statusText: report.submitted > 0 ? 'Успешно' : 'Нет'
+      value: report.complaintsSubmitted || 0,
+      status: report.complaintsSubmitted > 0 ? 'success' : 'warning',
+      statusText: report.complaintsSubmitted > 0 ? 'Успешно' : 'Нет'
     },
     {
-      label: 'Пропущено (уже обработаны)',
-      value: report.alreadyProcessed || 0,
+      label: 'Жалоб пропущено',
+      value: report.complaintsSkipped || 0,
       status: 'info',
       statusText: 'Пропущено'
     },
     {
-      label: 'Ошибки при подаче',
-      value: report.errors || 0,
-      status: report.errors > 0 ? 'error' : 'success',
-      statusText: report.errors > 0 ? 'Ошибка' : 'Нет ошибок'
+      label: 'Ошибки жалоб',
+      value: report.complaintsErrors || 0,
+      status: report.complaintsErrors > 0 ? 'error' : 'success',
+      statusText: report.complaintsErrors > 0 ? 'Ошибка' : 'Нет ошибок'
+    },
+    {
+      label: 'Переключений вкладок',
+      value: report.tabSwitches || 0,
+      status: 'info',
+      statusText: 'Навигация'
     }
   ];
 
@@ -596,4 +644,3 @@ function displayResults(report) {
 
   resultsBody.innerHTML = html;
 }
-
