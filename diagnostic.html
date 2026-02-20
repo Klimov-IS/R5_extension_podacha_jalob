@@ -351,6 +351,63 @@
       font-size: 12px;
     }
 
+    /* Task Type Selector */
+    .task-type-selector {
+      margin-bottom: 24px;
+      display: none;
+    }
+
+    .task-type-selector.active {
+      display: block;
+    }
+
+    .task-type-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+      user-select: none;
+    }
+
+    .task-type-label:hover {
+      background: #f9fafb;
+    }
+
+    .task-type-label input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: #8b5cf6;
+      cursor: pointer;
+    }
+
+    .task-type-label .task-type-name {
+      flex: 1;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .task-type-label .task-type-count {
+      font-size: 12px;
+      color: #6b7280;
+      background: #e5e7eb;
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+
+    .task-type-label input:disabled ~ .task-type-name {
+      color: #9ca3af;
+    }
+
+    .task-type-label:has(input:disabled) {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
     /* Hidden utility */
     .hidden {
       display: none !important;
@@ -526,6 +583,24 @@
       <div id="complaints-info" class="complaints-info hidden">
         <div id="complaints-count" class="complaints-count">0</div>
         <div class="complaints-label">задач к обработке</div>
+      </div>
+
+      <div id="task-type-selector" class="task-type-selector">
+        <label class="task-type-label">
+          <input type="checkbox" id="chk-status-parses" checked>
+          <span class="task-type-name">🔍 Парсинг статусов</span>
+          <span class="task-type-count" id="count-status-parses">0</span>
+        </label>
+        <label class="task-type-label">
+          <input type="checkbox" id="chk-chat-opens" checked>
+          <span class="task-type-name">💬 Открытие чатов</span>
+          <span class="task-type-count" id="count-chat-opens">0</span>
+        </label>
+        <label class="task-type-label">
+          <input type="checkbox" id="chk-complaints" checked>
+          <span class="task-type-name">📝 Подача жалоб</span>
+          <span class="task-type-count" id="count-complaints">0</span>
+        </label>
       </div>
 
       <div class="action-section">

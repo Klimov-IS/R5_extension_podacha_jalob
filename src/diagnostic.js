@@ -29,6 +29,13 @@ const resultsBody = document.getElementById('results-body');
 const previewCard = document.getElementById('preview-card');
 const previewAccordion = document.getElementById('preview-accordion');
 const btnRefreshStores = document.getElementById('btn-refresh-stores');
+const taskTypeSelector = document.getElementById('task-type-selector');
+const chkStatusParses = document.getElementById('chk-status-parses');
+const chkChatOpens = document.getElementById('chk-chat-opens');
+const chkComplaints = document.getElementById('chk-complaints');
+const countStatusParses = document.getElementById('count-status-parses');
+const countChatOpens = document.getElementById('count-chat-opens');
+const countComplaints = document.getElementById('count-complaints');
 
 // Состояние
 let loadedTasks = null; // { storeId, articles, totals, limits }
@@ -120,9 +127,37 @@ storeSelect.addEventListener('change', () => {
     hideResults();
     hidePreview();
     complaintsInfo.classList.add('hidden');
+    taskTypeSelector.classList.remove('active');
     btnSubmit.disabled = true;
     loadedTasks = null;
   }
+});
+
+// ========================================================================
+// ФИЛЬТР ТИПОВ ЗАДАЧ (checkboxes)
+// ========================================================================
+
+function getEnabledTaskTypes() {
+  const types = [];
+  if (chkStatusParses.checked) types.push('statusParses');
+  if (chkChatOpens.checked) types.push('chatOpens');
+  if (chkComplaints.checked) types.push('complaints');
+  return types;
+}
+
+function updateSelectedCount() {
+  if (!loadedTasks) return;
+  const totals = loadedTasks.totals || {};
+  let total = 0;
+  if (chkStatusParses.checked) total += totals.statusParses || 0;
+  if (chkChatOpens.checked) total += totals.chatOpens || 0;
+  if (chkComplaints.checked) total += totals.complaints || 0;
+  complaintsCountEl.textContent = total;
+  btnSubmit.disabled = total === 0;
+}
+
+[chkStatusParses, chkChatOpens, chkComplaints].forEach(chk => {
+  chk.addEventListener('change', updateSelectedCount);
 });
 
 // ========================================================================
@@ -175,6 +210,21 @@ async function getTasks() {
     complaintsInfo.classList.remove('hidden');
     btnSubmit.disabled = false;
 
+    // Показываем чекбоксы типов задач
+    countStatusParses.textContent = totals.statusParses || 0;
+    countChatOpens.textContent = totals.chatOpens || 0;
+    countComplaints.textContent = totals.complaints || 0;
+
+    // Disable + uncheck types with 0 tasks
+    chkStatusParses.disabled = !(totals.statusParses > 0);
+    chkStatusParses.checked = totals.statusParses > 0;
+    chkChatOpens.disabled = !(totals.chatOpens > 0);
+    chkChatOpens.checked = totals.chatOpens > 0;
+    chkComplaints.disabled = !(totals.complaints > 0);
+    chkComplaints.checked = totals.complaints > 0;
+
+    taskTypeSelector.classList.add('active');
+
     // Показываем превью
     showPreview(loadedTasks);
 
@@ -202,15 +252,20 @@ async function submitTasks() {
 
   const totals = loadedTasks.totals || {};
 
-  // Подтверждение
+  // Подтверждение — только выбранные типы
+  const enabledTypes = getEnabledTaskTypes();
   const storeName = storeSelect.options[storeSelect.selectedIndex].textContent;
+
+  const typeLines = [];
+  if (enabledTypes.includes('statusParses')) typeLines.push(`  • Парсинг статусов: ${totals.statusParses || 0}`);
+  if (enabledTypes.includes('chatOpens')) typeLines.push(`  • Открытие чатов: ${totals.chatOpens || 0}`);
+  if (enabledTypes.includes('complaints')) typeLines.push(`  • Подача жалоб: ${totals.complaints || 0}`);
+
   const confirmed = confirm(
     `ВНИМАНИЕ! РЕАЛЬНАЯ ОБРАБОТКА ЗАДАЧ!\n\n` +
     `Магазин: ${storeName}\n\n` +
-    `Задачи первого раунда:\n` +
-    `  • Парсинг статусов: ${totals.statusParses || 0}\n` +
-    `  • Открытие чатов: ${totals.chatOpens || 0}\n` +
-    `  • Подача жалоб: ${totals.complaints || 0}\n\n` +
+    `Выбранные задачи:\n` +
+    typeLines.join('\n') + `\n\n` +
     `Система будет запрашивать задачи порциями,\n` +
     `пока API не вернёт 0 задач (все обработаны).\n\n` +
     `Перед ПЕРВОЙ жалобой вы увидите заполненную форму для проверки.\n\n` +
@@ -306,7 +361,8 @@ async function submitTasks() {
       const response = await chrome.tabs.sendMessage(wbTab.id, {
         type: 'runTaskWorkflow',
         tasks: tasks,
-        storeId: currentStoreId
+        storeId: currentStoreId,
+        enabledTaskTypes: enabledTypes
       });
 
       if (!response.success) {

@@ -145,6 +145,7 @@ function injectMainWorldBundle() {
       if (request.type === "runTaskWorkflow") {
         const tasks = request.tasks || {};
         const storeId = request.storeId || null;
+        const enabledTaskTypes = request.enabledTaskTypes || null;
 
         if (!tasks.articles || Object.keys(tasks.articles).length === 0) {
           sendResponse({ success: false, error: 'No tasks to process' });
@@ -179,7 +180,7 @@ function injectMainWorldBundle() {
           window.dispatchEvent(new CustomEvent('wb-call-main-world', {
             detail: {
               action: 'runTaskWorkflow',
-              data: { tasks, storeId },
+              data: { tasks, storeId, enabledTaskTypes },
               requestId
             }
           }));

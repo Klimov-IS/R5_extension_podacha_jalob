@@ -551,10 +551,20 @@ class OptimizedHandler {
      * @returns {Promise<Object>} report
      */
     static async runTaskWorkflow(options = {}) {
-      const { tasks, storeId } = options;
+      const { tasks, storeId, enabledTaskTypes } = options;
       const articles = tasks?.articles || {};
       const limits = tasks?.limits || {};
       const articleIds = Object.keys(articles);
+
+      // Фильтр типов задач (UI checkboxes)
+      if (enabledTaskTypes && enabledTaskTypes.length > 0) {
+        console.log(`[TW] Фильтр типов задач: [${enabledTaskTypes.join(', ')}]`);
+        for (const pid of articleIds) {
+          if (!enabledTaskTypes.includes('statusParses')) articles[pid].statusParses = [];
+          if (!enabledTaskTypes.includes('chatOpens')) articles[pid].chatOpens = [];
+          if (!enabledTaskTypes.includes('complaints')) articles[pid].complaints = [];
+        }
+      }
 
       const report = {
         timestamp: new Date().toISOString(),
