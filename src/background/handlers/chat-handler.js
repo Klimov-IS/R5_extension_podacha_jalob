@@ -149,29 +149,48 @@ export class ChatHandler {
    * @returns {Promise<Object>} { success, chatRecordId, chatUrl, anchorFound }
    */
   async processChatTab(message) {
-    const { storeId, productId, rating, reviewDate, reviewKey } = message;
+    const { storeId, productId, rating, reviewDate, reviewKey, tabId } = message;
     const tag = `[ChatHandler][${productId}]`;
 
-    console.log(`${tag} ▶ processChatTab CALLED`, { storeId, productId, rating, reviewKey });
+    console.log(`${tag} ▶ processChatTab CALLED`, { storeId, productId, rating, reviewKey, tabId: tabId || 'none (polling)' });
 
     let chatTab = null;
+    let usedDirectTabId = false;
     try {
-      // 1. Найти вкладку чата (WB API медленный — создание чата может занять 15-20с)
-      console.log(`${tag} 1/7 Поиск вкладки чата (timeout 25s)...`);
-      chatTab = await this._findChatTab(25000);
+      // 1. Найти вкладку чата
+      if (tabId) {
+        // Direct path: tabId передан от createTab → без поллинга
+        console.log(`${tag} 1/7 Прямой tabId=${tabId}, получаем вкладку...`);
+        try {
+          chatTab = await chrome.tabs.get(tabId);
+          usedDirectTabId = true;
+          console.log(`${tag} 1/7 ✓ Вкладка получена напрямую: id=${chatTab.id}, status=${chatTab.status}`);
+        } catch (e) {
+          console.warn(`${tag} 1/7 Direct tab ${tabId} не найден (${e.message}), fallback на поллинг...`);
+        }
+      }
+
       if (!chatTab) {
-        console.warn(`${tag} ✗ Вкладка чата НЕ найдена за 25с`);
-        return { success: false, error: 'Chat tab not detected within 25s' };
+        // Fallback: поллинг (обратная совместимость, или если direct tabId не сработал)
+        console.log(`${tag} 1/7 Поиск вкладки чата через поллинг (timeout 25s)...`);
+        chatTab = await this._findChatTab(25000);
       }
 
-      console.log(`${tag} 2/7 Вкладка найдена: id=${chatTab.id}, url=${chatTab.url?.substring(0, 80)}, status=${chatTab.status}`);
-
-      // Защита от повторной обработки
-      if (this._processedTabIds.has(chatTab.id)) {
-        console.warn(`${tag} ✗ Tab ${chatTab.id} уже обрабатывался`);
-        return { success: false, error: 'Tab already processed' };
+      if (!chatTab) {
+        console.warn(`${tag} ✗ Вкладка чата НЕ найдена`);
+        return { success: false, error: 'Chat tab not detected' };
       }
-      this._processedTabIds.add(chatTab.id);
+
+      console.log(`${tag} 2/7 Вкладка найдена: id=${chatTab.id}, url=${chatTab.url?.substring(0, 80)}, status=${chatTab.status}, direct=${usedDirectTabId}`);
+
+      // Защита от повторной обработки (только для polling path)
+      if (!usedDirectTabId) {
+        if (this._processedTabIds.has(chatTab.id)) {
+          console.warn(`${tag} ✗ Tab ${chatTab.id} уже обрабатывался`);
+          return { success: false, error: 'Tab already processed' };
+        }
+        this._processedTabIds.add(chatTab.id);
+      }
 
       // 2. Дождаться загрузки
       if (chatTab.status !== 'complete') {
@@ -288,7 +307,8 @@ export class ChatHandler {
       return { success: false, error: err.message };
     } finally {
       // Cleanup — гарантированно чистим даже при ошибке
-      if (chatTab?.id) {
+      // Только для polling path (direct tabId не добавляется в _processedTabIds)
+      if (chatTab?.id && !usedDirectTabId) {
         this._processedTabIds.delete(chatTab.id);
       }
     }

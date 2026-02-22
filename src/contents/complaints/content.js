@@ -300,7 +300,7 @@ function injectMainWorldBundle() {
     window.addEventListener('wb-chat-request', async (event) => {
       const { requestId, ...data } = event.detail;
 
-      console.log('[Complaints] wb-chat-request → sending processChatTab to background', { requestId, productId: data.productId, storeId: data.storeId });
+      console.log('[Complaints] wb-chat-request → sending processChatTab to background', { requestId, productId: data.productId, storeId: data.storeId, tabId: data.tabId || null });
 
       try {
         const response = await chrome.runtime.sendMessage({
@@ -324,13 +324,14 @@ function injectMainWorldBundle() {
     // ========================================================================
     // BRIDGE: Create Tab (обход popup-блокировки Chrome)
     // MAIN world → ISOLATED world → Background → chrome.tabs.create()
+    // Возвращает tabId обратно в MAIN world через wb-create-tab-response
     // ========================================================================
 
     window.addEventListener('wb-create-tab', async (event) => {
-      const { url } = event.detail;
+      const { url, correlationId } = event.detail;
       if (!url) return;
 
-      console.log('[Complaints] wb-create-tab → creating tab:', url?.substring(0, 80));
+      console.log('[Complaints] wb-create-tab → creating tab:', url?.substring(0, 80), 'correlationId:', correlationId);
 
       try {
         const result = await chrome.runtime.sendMessage({
@@ -338,8 +339,24 @@ function injectMainWorldBundle() {
           url: url
         });
         console.log('[Complaints] wb-create-tab ← result:', result);
+
+        // Relay tabId back to MAIN world for direct tab processing
+        if (correlationId) {
+          window.dispatchEvent(new CustomEvent('wb-create-tab-response', {
+            detail: {
+              correlationId,
+              tabId: result?.tabId || null,
+              success: result?.success || false
+            }
+          }));
+        }
       } catch (error) {
         console.error('[Complaints] Create tab bridge error:', error);
+        if (correlationId) {
+          window.dispatchEvent(new CustomEvent('wb-create-tab-response', {
+            detail: { correlationId, tabId: null, success: false, error: error.message }
+          }));
+        }
       }
     });
 

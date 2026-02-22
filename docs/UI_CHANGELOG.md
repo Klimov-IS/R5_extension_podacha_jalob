@@ -21,6 +21,41 @@ Each entry should include:
 
 ### February 2026
 
+#### 2026-02-22: Pipeline Chat Opening + Chat Button Wait Fix
+
+**Change Type:** Performance + Bug Fix
+
+**What Changed:**
+
+1. **Pipeline chat opening:**
+   - Chats now open in pipeline mode: clicks are sequential (3s apart), but background tab processing runs in parallel
+   - Previously: each chat waited for full background processing + 10s cooldown before next click
+   - Now: all clicks happen first, then all background processing runs simultaneously via `Promise.allSettled`
+   - ~2x speedup for 5 chats (85s vs 175s), ~2.4x for 10 chats
+
+2. **Direct tabId passing:**
+   - `wb-create-tab` bridge now returns `tabId` back to MAIN world via `wb-create-tab-response` event
+   - `processChatTab` accepts direct `tabId` — eliminates `_findChatTab()` polling race condition
+   - Critical for parallel processing: multiple concurrent `processChatTab` calls no longer compete for the same tab
+
+3. **Chat button SVG wait fix:**
+   - `_waitForTableReady()` now accepts `{ requireChatButtons: true }` option
+   - When set, waits for SVG chat button icons to render (2-3s delay after table rows appear)
+   - Prevents incorrect `chatStatus` detection due to premature parsing
+
+**Files Modified:**
+- `src/contents/complaints/services/chat-service.js` — `clickAndCapture()`, `processCaptured()` methods
+- `src/contents/complaints/content.js` — `wb-create-tab-response` relay
+- `src/background/handlers/chat-handler.js` — accept direct `tabId`
+- `src/contents/complaints/handlers/optimized-handler.js` — pipeline loop, `_waitForTableReady` enhancement
+- `src/contents/complaints/dom/selectors.catalog.js` — `CHAT_PARALLEL` config
+
+**Selectors Added:**
+- `CHAT_PARALLEL.clickIntervalMs` = 3000 (delay between clicks)
+- `CHAT_PARALLEL.urlCaptureTimeoutMs` = 25000 (max wait for window.open)
+
+---
+
 #### 2026-02-21: Transparent Stars + Centralized Blocking Statuses
 
 **Change Type:** Feature + Refactor

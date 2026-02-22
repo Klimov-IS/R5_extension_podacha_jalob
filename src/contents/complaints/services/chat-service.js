@@ -12,9 +12,14 @@
  * РЕШЕНИЕ: Перехватываем window.open(), передаём URL в background,
  * background открывает вкладку через chrome.tabs.create() (без ограничений).
  *
+ * Поддерживает два режима:
+ * - openChat() — последовательный (обратная совместимость)
+ * - clickAndCapture() + processCaptured() — pipeline (параллельная обработка)
+ *
  * @module services/chat-service
  * @since 2.1.0 (19.02.2026)
- * @see docs/Sprint 2. Chats/TASK_чаты.md
+ * @updated 2.2.0 (22.02.2026) — pipeline mode, direct tabId passing
+ * @see docs/TASK/TASK-20260222-parallel-chat-opening.md
  */
 
 'use strict';
@@ -31,21 +36,32 @@ class ChatService {
   }
 
   /**
-   * Открыть чат для отзыва
-   *
-   * Flow:
-   * 1. Monkey-patch window.open → перехватываем URL
-   * 2. Кликаем кнопку чата
-   * 3. WB вызывает window.open(chatUrl) → наш перехватчик ловит URL
-   * 4. Передаём URL в background → chrome.tabs.create()
-   * 5. Background обнаруживает вкладку, парсит якорь, вызывает API, закрывает вкладку
+   * Открыть чат для отзыва (последовательный режим, обратная совместимость)
    *
    * @param {HTMLElement} row - строка таблицы с отзывом
    * @param {Object} reviewData
    * @returns {Promise<Object>} { success, chatRecordId, chatUrl, anchorFound }
    */
   async openChat(row, reviewData) {
-    // Сохраняем оригинальный window.open для восстановления
+    const captured = await this.clickAndCapture(row, reviewData);
+    if (!captured || !captured.success) {
+      return { success: false, error: captured?.error || 'Click and capture failed' };
+    }
+
+    return this.processCaptured(captured);
+  }
+
+  /**
+   * Фаза 1 Pipeline: Клик по кнопке + перехват URL + получение tabId
+   *
+   * Выполняет клик, ждёт пока WB вызовет window.open(), перехватывает URL,
+   * получает tabId из background. НЕ ждёт обработки вкладки.
+   *
+   * @param {HTMLElement} row - строка таблицы с отзывом
+   * @param {Object} reviewData - { productId, rating, reviewDate, reviewKey }
+   * @returns {Promise<Object>} { success, chatUrl, tabId, reviewData } или { success: false, error }
+   */
+  async clickAndCapture(row, reviewData) {
     const originalWindowOpen = window.open;
 
     try {
@@ -61,15 +77,29 @@ class ChatService {
         return { success: false, error: 'Chat button is disabled' };
       }
 
-      // 2. Перехватываем window.open() — Chrome блокирует popup из programmatic click
+      // 2. Настраиваем перехват window.open() с correlationId для получения tabId
       let capturedUrl = null;
+      let capturedTabId = null;
+      const correlationId = `tab_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+
+      // Слушаем ответ с tabId от ISOLATED world
+      const tabIdHandler = (event) => {
+        if (event.detail.correlationId === correlationId) {
+          capturedTabId = event.detail.tabId;
+          console.log(`[ChatService] tabId получен: ${capturedTabId} (correlationId=${correlationId})`);
+          window.removeEventListener('wb-create-tab-response', tabIdHandler);
+        }
+      };
+      window.addEventListener('wb-create-tab-response', tabIdHandler);
+
+      // Monkey-patch window.open
       window.open = function(url, target, features) {
         if (url && typeof url === 'string' && url.includes('chat-with-clients')) {
           capturedUrl = url;
           console.log(`[ChatService] window.open перехвачен! URL: ${url.substring(0, 100)}...`);
-          // Передаём URL в background для создания вкладки
+          // Передаём URL + correlationId в background для создания вкладки
           window.dispatchEvent(new CustomEvent('wb-create-tab', {
-            detail: { url }
+            detail: { url, correlationId }
           }));
           // Возвращаем mock window object чтобы WB не упал
           return { closed: false, close: () => {}, focus: () => {} };
@@ -87,8 +117,7 @@ class ChatService {
       chatButton.click();
 
       // 5. Ждём пока WB вызовет window.open (их API может занять 15-20с)
-      // Поллинг каждые 500мс, максимум 25с
-      const maxWait = 25000;
+      const maxWait = window.SELECTORS?.CHAT_PARALLEL?.urlCaptureTimeoutMs || 25000;
       const start = Date.now();
       while (!capturedUrl && Date.now() - start < maxWait) {
         await window.WBUtils.sleep(500);
@@ -98,29 +127,63 @@ class ChatService {
       window.open = originalWindowOpen;
 
       if (!capturedUrl) {
+        window.removeEventListener('wb-create-tab-response', tabIdHandler);
         console.warn('[ChatService] window.open не был вызван за 25с');
-        return { success: false, error: 'window.open not intercepted within 25s' };
+        return { success: false, error: 'window.open not intercepted within timeout' };
       }
 
-      console.log('[ChatService] URL перехвачен, запрос обработки...');
+      // 6. Ждём tabId (должен прийти быстро — createTab занимает <100мс)
+      const tabIdWaitStart = Date.now();
+      while (!capturedTabId && Date.now() - tabIdWaitStart < 3000) {
+        await window.WBUtils.sleep(100);
+      }
 
-      // 6. Запрашиваем обработку (background уже создал вкладку через wb-create-tab)
-      const result = await this._requestChatProcessing({
-        storeId: this.storeId,
-        productId: reviewData.productId,
-        rating: reviewData.rating,
-        reviewDate: reviewData.reviewDate,
-        reviewKey: reviewData.reviewKey
-      });
+      if (!capturedTabId) {
+        window.removeEventListener('wb-create-tab-response', tabIdHandler);
+        console.warn('[ChatService] tabId не получен за 3с, обработка без прямого tabId');
+      }
 
-      console.log('[ChatService] Результат:', result?.success ? 'OK' : result?.error);
-      return result;
+      console.log(`[ChatService] Capture OK: url=${capturedUrl.substring(0, 80)}, tabId=${capturedTabId}`);
+
+      return {
+        success: true,
+        chatUrl: capturedUrl,
+        tabId: capturedTabId,
+        reviewData: {
+          storeId: this.storeId,
+          productId: reviewData.productId,
+          rating: reviewData.rating,
+          reviewDate: reviewData.reviewDate,
+          reviewKey: reviewData.reviewKey
+        }
+      };
     } catch (err) {
-      // Восстанавливаем window.open в случае ошибки
       window.open = originalWindowOpen;
-      console.error('[ChatService] openChat error:', err);
+      console.error('[ChatService] clickAndCapture error:', err);
       return { success: false, error: err.message };
     }
+  }
+
+  /**
+   * Фаза 2 Pipeline: Запуск обработки вкладки в background
+   *
+   * Отправляет запрос processChatTab с уже известным tabId.
+   * Возвращает Promise который резолвится когда background закончит.
+   *
+   * @param {Object} captured - результат clickAndCapture()
+   * @returns {Promise<Object>} { success, chatRecordId, chatUrl, anchorFound }
+   */
+  processCaptured(captured) {
+    if (!captured || !captured.success) {
+      return Promise.resolve({ success: false, error: 'Invalid captured data' });
+    }
+
+    console.log(`[ChatService] processCaptured: tabId=${captured.tabId}, key=${captured.reviewData?.reviewKey}`);
+
+    return this._requestChatProcessing({
+      ...captured.reviewData,
+      tabId: captured.tabId
+    });
   }
 
   /**

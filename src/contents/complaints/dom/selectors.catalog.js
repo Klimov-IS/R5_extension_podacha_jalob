@@ -358,6 +358,17 @@ const CHAT_TIMING = {
 };
 
 /**
+ * Chat Parallel Processing config
+ * Controls pipeline mode: sequential clicks + parallel background processing
+ *
+ * @see docs/TASK/TASK-20260222-parallel-chat-opening.md
+ */
+const CHAT_PARALLEL = {
+  clickIntervalMs: 3000,      // Пауза между кликами по кнопкам чата (мс)
+  urlCaptureTimeoutMs: 25000  // Макс ожидание window.open() после клика (мс)
+};
+
+/**
  * Timing constants (milliseconds)
  */
 const TIMING = {
@@ -401,7 +412,8 @@ window.SELECTORS = {
   CHAT_MESSAGE: CHAT_MESSAGE_SELECTORS,
   CHAT_ANCHOR: CHAT_ANCHOR_SELECTORS,
   CHAT_INPUT: CHAT_INPUT_SELECTORS,
-  CHAT_TIMING
+  CHAT_TIMING,
+  CHAT_PARALLEL
 };
 
 // Module loaded
