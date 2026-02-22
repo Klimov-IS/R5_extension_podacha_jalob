@@ -235,7 +235,11 @@
      */
     _isAlreadyProcessed(row) {
       const rowText = row.textContent || '';
-      return rowText.includes('Жалоба отклонена') || rowText.includes('Жалоба на рассмотрении');
+      // Use centralized blocking statuses from selectors catalog
+      const blockingStatuses = window.SELECTORS?.REVIEW_BLOCKING?.complaintStatuses || [
+        'Жалоба отклонена', 'Жалоба одобрена', 'Проверяем жалобу', 'Жалоба пересмотрена'
+      ];
+      return blockingStatuses.some(s => rowText.includes(s));
     }
 
     /**

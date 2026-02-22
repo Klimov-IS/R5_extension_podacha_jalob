@@ -21,6 +21,43 @@ Each entry should include:
 
 ### February 2026
 
+#### 2026-02-21: Transparent Stars + Centralized Blocking Statuses
+
+**Change Type:** Feature + Refactor
+
+**What Changed:**
+
+1. **Transparent Stars (new WB feature):**
+   - WB now marks some reviews as "excluded from rating" — stars rendered with `Rating--disabled` CSS class
+   - Warning icon (!) appears next to rating in `Valuation-rating--right-icon` container
+   - These reviews are no longer counted in product rating by WB
+
+2. **New blocker: `ratingExcluded`:**
+   - Reviews with transparent stars are now skipped for both complaints and chats
+   - `DataExtractor.isRatingExcluded(row)` detects this via:
+     - Primary: `[class*="Rating--disabled"]` on star divs
+     - Fallback: `[class*="Valuation-rating--right-icon"]` container presence
+   - `extractReviewData()` now returns `ratingExcluded: boolean` field
+   - Status sync sends `ratingExcluded` to backend
+
+3. **Centralized blocking statuses:**
+   - `REVIEW_BLOCKING` object added to `selectors.catalog.js` — single source of truth
+   - `complaintStatuses`: statuses blocking complaint submission
+   - `chatStatuses`: statuses blocking chat opening
+   - Removed hardcoded duplicate arrays from `optimized-handler.js` (4 places)
+   - Fixed `complaint-service.js`: was checking `'Жалоба на рассмотрении'` (incorrect) instead of `'Проверяем жалобу'`
+
+**Files Updated:**
+- `src/contents/complaints/dom/selectors.catalog.js` — `REVIEW_BLOCKING`, `RATING_SELECTORS` updated
+- `src/contents/complaints/dom/data-extractor.js` — `isRatingExcluded()`, `extractReviewData()`
+- `src/contents/complaints/handlers/optimized-handler.js` — deduplicated statuses, added ratingExcluded checks
+- `src/contents/complaints/services/complaint-service.js` — `_isAlreadyProcessed()` fixed
+- `src/services/status-sync-service.js` — sync comment added
+- `docs/DOM_CONTRACT.md` — transparent stars documented
+- `docs/UI_CHANGELOG.md` — this entry
+
+---
+
 #### 2026-02-19: Unified Tasks API Migration (v4.0)
 
 **Change Type:** Feature — Unified tasks workflow replacing separate complaints + chat rules endpoints

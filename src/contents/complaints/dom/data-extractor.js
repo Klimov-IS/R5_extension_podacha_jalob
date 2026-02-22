@@ -332,6 +332,45 @@
     }
 
     /**
+     * Проверить, исключён ли отзыв из рейтинга WB (прозрачные звёзды)
+     *
+     * WB (февраль 2026) помечает некоторые отзывы как "не учитываются в рейтинге".
+     * Визуально звёзды становятся прозрачными, рядом появляется иконка "!".
+     *
+     * DOM-признаки:
+     * - Primary: класс Rating--disabled на div-ах звёзд
+     * - Fallback: контейнер Valuation-rating--right-icon (иконка "!")
+     *
+     * @param {HTMLElement} row - строка таблицы
+     * @returns {boolean} - true если отзыв исключён из рейтинга
+     */
+    static isRatingExcluded(row) {
+      try {
+        // Primary: проверяем класс Rating--disabled на звёздах
+        const disabledSelector = window.SELECTORS?.RATING?.disabledStarClass || 'Rating--disabled';
+        const ratingContainer = row.querySelector('[class*="Rating__"]');
+        if (ratingContainer) {
+          const disabledStar = ratingContainer.querySelector(`[class*="${disabledSelector}"]`);
+          if (disabledStar) {
+            return true;
+          }
+        }
+
+        // Fallback: проверяем наличие контейнера Valuation-rating--right-icon (иконка "!")
+        const excludedSelector = window.SELECTORS?.RATING?.excludedContainer || 'Valuation-rating--right-icon';
+        const warningIcon = row.querySelector(`[class*="${excludedSelector}"]`);
+        if (warningIcon) {
+          return true;
+        }
+
+        return false;
+      } catch (error) {
+        console.error('[DataExtractor] Ошибка при проверке исключения из рейтинга:', error);
+        return false;
+      }
+    }
+
+    /**
      * Получить статус кнопки чата из строки отзыва
      *
      * Кнопка чата имеет 3 состояния:
@@ -415,7 +454,8 @@
      *   reviewDate: "2026-01-18T15:17:00.000Z", // ISO 8601
      *   key: "187489568_1_2026-01-18T15:17:00.000Z",
      *   statuses: ["Виден", "Жалоба отклонена", "Выкуп"],
-     *   chatStatus: "chat_opened" // NEW: статус кнопки чата
+     *   chatStatus: "chat_opened",
+     *   ratingExcluded: false // true = прозрачные звёзды, отзыв не учитывается WB
      * }
      *
      * Note: text field removed for memory optimization (not used in complaint flow).
@@ -426,6 +466,7 @@
       const rating = this.getRating(row);
       const statuses = this.getReviewStatuses(row);
       const chatStatus = this.getChatStatus(row);
+      const ratingExcluded = this.isRatingExcluded(row);
 
       if (!reviewDate || !rating) {
         return null;
@@ -439,7 +480,8 @@
         reviewDate: reviewDate, // ISO 8601 формат
         key: reviewKey,
         statuses: statuses,
-        chatStatus: chatStatus
+        chatStatus: chatStatus,
+        ratingExcluded: ratingExcluded
       };
     }
   }

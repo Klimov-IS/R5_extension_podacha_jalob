@@ -138,10 +138,23 @@ For matching, seconds are removed:
 1. Count elements with class `Rating--active__`
 2. Count SVG paths with `fill="#FF773C"`
 
+**Transparent Stars (February 2026):**
+
+WB marks certain reviews as "excluded from rating" — their stars become transparent/faded. These reviews should be skipped (no complaints, no chats).
+
+DOM indicators:
+1. **Primary:** Star divs have class `Rating--disabled__` (e.g. `Rating--active__xxx Rating--disabled__xxx`)
+2. **Fallback:** Parent container has class `Valuation-rating--right-icon__` with a warning icon (!) SVG
+
+Normal stars do NOT have `Rating--disabled` class.
+
+Detection: `DataExtractor.isRatingExcluded(row)` returns `true` for excluded reviews.
+
 **Invariants:**
 - Always exactly 5 star positions
 - Active stars count = rating (1-5)
 - Stars are ordered left to right (1st → 5th)
+- Stars may have `Rating--disabled` class = review excluded from WB rating
 
 ---
 

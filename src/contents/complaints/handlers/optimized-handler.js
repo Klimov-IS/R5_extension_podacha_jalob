@@ -55,6 +55,7 @@ class OptimizedHandler {
         articleResults: [],
         overallStatus: null,
         totalReviewsSynced: 0,
+        ratingExcluded: 0,
         // Chat workflow stats (Sprint 2)
         chatsOpened: 0,
         chatsSkipped: 0,
@@ -199,7 +200,8 @@ class OptimizedHandler {
               reviewDate: reviewData.date || reviewData.reviewDate,
               key: reviewData.key,
               statuses: statuses,
-              chatStatus: reviewData.chatStatus || null
+              chatStatus: reviewData.chatStatus || null,
+              ratingExcluded: reviewData.ratingExcluded || false
             });
             report.totalReviewsSynced++;
 
@@ -218,16 +220,19 @@ class OptimizedHandler {
               }
 
               // Определяем возможность подачи жалобы
-              const COMPLAINT_STATUSES = [
-                'Жалоба отклонена',
-                'Жалоба одобрена',
-                'Проверяем жалобу',
-                'Жалоба пересмотрена'
+              const complaintBlockingStatuses = window.SELECTORS?.REVIEW_BLOCKING?.complaintStatuses || [
+                'Жалоба отклонена', 'Жалоба одобрена', 'Проверяем жалобу', 'Жалоба пересмотрена'
               ];
 
-              const hasComplaintStatus = statuses.some(s => COMPLAINT_STATUSES.includes(s));
+              const hasComplaintStatus = statuses.some(s => complaintBlockingStatuses.includes(s));
 
-              if (!hasComplaintStatus) {
+              // Проверяем прозрачные звёзды (отзыв исключён из рейтинга WB)
+              if (reviewData.ratingExcluded) {
+                report.ratingExcluded++;
+                report.alreadyProcessed++;
+                articleResult.skipped.push(normalizedPageKey);
+                console.log(`[Test4] Пропуск: прозрачные звёзды (ratingExcluded) key=${normalizedPageKey}`);
+              } else if (!hasComplaintStatus) {
                 // МОЖНО подать жалобу
                 report.canSubmitComplaint++;
 
@@ -419,15 +424,18 @@ class OptimizedHandler {
         return;
       }
 
-      // 5. Блокирующие статусы
-      const CHAT_BLOCKING_STATUSES = [
-        'Жалоба одобрена',
-        'Исключен из рейтинга',
-        'Исключён из рейтинга',
-        'Дополнен',
-        'Снят с публикации'
+      // 5. Прозрачные звёзды — отзыв исключён из рейтинга WB
+      if (reviewData.ratingExcluded) {
+        console.log(`${logKey} SKIP: прозрачные звёзды (ratingExcluded)`);
+        report.chatsSkipped++;
+        return;
+      }
+
+      // 6. Блокирующие статусы
+      const chatBlockingStatuses = window.SELECTORS?.REVIEW_BLOCKING?.chatStatuses || [
+        'Жалоба одобрена', 'Исключен из рейтинга', 'Исключён из рейтинга', 'Дополнен', 'Снят с публикации'
       ];
-      const blockingFound = statuses.filter(s => CHAT_BLOCKING_STATUSES.includes(s));
+      const blockingFound = statuses.filter(s => chatBlockingStatuses.includes(s));
       if (blockingFound.length > 0) {
         console.log(`${logKey} SKIP: блокирующие статусы: [${blockingFound}]`);
         report.chatsSkipped++;
@@ -759,7 +767,8 @@ class OptimizedHandler {
                 reviewDate: reviewData.reviewDate,
                 key: reviewData.key,
                 statuses: statuses,
-                chatStatus: reviewData.chatStatus || null
+                chatStatus: reviewData.chatStatus || null,
+                ratingExcluded: reviewData.ratingExcluded || false
               });
               report.totalReviewsSynced++;
               articleResult.reviewsSynced++;
@@ -785,9 +794,16 @@ class OptimizedHandler {
                   console.warn(`[TW]     Строка ${rowIdx + 1}: ЧАТЫ пропуск — кнопка disabled (chat_not_activated)`);
                   report.chatsSkipped++;
                   articleResult.chatsSkipped = (articleResult.chatsSkipped || 0) + 1;
-                // Pre-check 2: skip if review has blocking statuses (safety net — backend should filter these)
-                } else if (statuses.some(s => ['Жалоба одобрена', 'Снят с публикации', 'Исключён из рейтинга', 'Исключен из рейтинга', 'Дополнен'].includes(s))) {
-                  const blockingFound = statuses.filter(s => ['Жалоба одобрена', 'Снят с публикации', 'Исключён из рейтинга', 'Исключен из рейтинга', 'Дополнен'].includes(s));
+                // Pre-check 2: skip if rating excluded (transparent stars)
+                } else if (reviewData.ratingExcluded) {
+                  console.warn(`[TW]     Строка ${rowIdx + 1}: ЧАТЫ пропуск — прозрачные звёзды (ratingExcluded)`);
+                  report.chatsSkipped++;
+                  articleResult.chatsSkipped = (articleResult.chatsSkipped || 0) + 1;
+                  report.ratingExcluded = (report.ratingExcluded || 0) + 1;
+                // Pre-check 3: skip if review has blocking statuses (safety net — backend should filter these)
+                } else if (statuses.some(s => (window.SELECTORS?.REVIEW_BLOCKING?.chatStatuses || ['Жалоба одобрена', 'Снят с публикации', 'Исключён из рейтинга', 'Исключен из рейтинга', 'Дополнен']).includes(s))) {
+                  const twChatBlocking = window.SELECTORS?.REVIEW_BLOCKING?.chatStatuses || ['Жалоба одобрена', 'Снят с публикации', 'Исключён из рейтинга', 'Исключен из рейтинга', 'Дополнен'];
+                  const blockingFound = statuses.filter(s => twChatBlocking.includes(s));
                   console.warn(`[TW]     Строка ${rowIdx + 1}: ЧАТЫ пропуск — блокирующий статус: [${blockingFound.join(', ')}]`);
                   report.chatsSkipped++;
                   articleResult.chatsSkipped = (articleResult.chatsSkipped || 0) + 1;
@@ -845,13 +861,17 @@ class OptimizedHandler {
                 const complaint = complaintsMap.get(normalizedKey);
 
                 // Check for blocking statuses on the DOM (double-check)
-                const COMPLAINT_STATUSES = [
-                  'Жалоба отклонена', 'Жалоба одобрена',
-                  'Проверяем жалобу', 'Жалоба пересмотрена'
+                const twComplaintBlocking = window.SELECTORS?.REVIEW_BLOCKING?.complaintStatuses || [
+                  'Жалоба отклонена', 'Жалоба одобрена', 'Проверяем жалобу', 'Жалоба пересмотрена'
                 ];
-                const hasComplaintStatus = statuses.some(s => COMPLAINT_STATUSES.includes(s));
+                const hasComplaintStatus = statuses.some(s => twComplaintBlocking.includes(s));
 
-                if (hasComplaintStatus) {
+                if (reviewData.ratingExcluded) {
+                  report.complaintsSkipped++;
+                  articleResult.complaintsSkipped++;
+                  report.ratingExcluded = (report.ratingExcluded || 0) + 1;
+                  console.log(`[TW]     Строка ${rowIdx + 1}: ЖАЛОБА пропущена (прозрачные звёзды, ratingExcluded) key=${normalizedKey}`);
+                } else if (hasComplaintStatus) {
                   report.complaintsSkipped++;
                   articleResult.complaintsSkipped++;
                   console.log(`[TW]     Строка ${rowIdx + 1}: ЖАЛОБА пропущена (статус: ${statuses.join(', ')}) key=${normalizedKey}`);

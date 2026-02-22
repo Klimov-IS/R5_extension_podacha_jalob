@@ -33,12 +33,18 @@ const ROW_SELECTORS = {
 
 /**
  * Rating Display - Star rating indicator (1-5)
+ *
+ * February 2026: WB added "transparent stars" for reviews excluded from rating.
+ * These reviews have Rating--disabled class on star divs and a warning icon (!) nearby.
  */
 const RATING_SELECTORS = {
   container: '[class*="Rating__"]',
   activeStars: '[class*="Rating--active__"]',
   // Fallback: SVG fill color for active stars
-  activeFillColor: '#FF773C'
+  activeFillColor: '#FF773C',
+  // Transparent/disabled stars — review excluded from WB rating
+  disabledStarClass: 'Rating--disabled',            // Primary: class on star div
+  excludedContainer: 'Valuation-rating--right-icon'  // Fallback: warning icon "!" container
 };
 
 /**
@@ -73,6 +79,7 @@ const KNOWN_STATUSES = {
 
 /**
  * Blocking statuses - Prevent new complaint submission
+ * @deprecated Use REVIEW_BLOCKING.complaintStatuses instead
  */
 const BLOCKING_STATUSES = [
   'Жалоба отклонена',
@@ -80,6 +87,33 @@ const BLOCKING_STATUSES = [
   'Проверяем жалобу',
   'Жалоба пересмотрена'
 ];
+
+/**
+ * Centralized blocking statuses for complaints and chats
+ *
+ * SINGLE SOURCE OF TRUTH — all blocking logic must reference this object.
+ * Do NOT hardcode status strings in handlers/services.
+ *
+ * Note: status-sync-service.js (ES module, Service Worker) maintains its own copy
+ * because it has no access to window.SELECTORS. Keep them in sync manually.
+ */
+const REVIEW_BLOCKING = {
+  /** Statuses that prevent submitting a NEW complaint */
+  complaintStatuses: [
+    'Жалоба отклонена',
+    'Жалоба одобрена',
+    'Проверяем жалобу',
+    'Жалоба пересмотрена'
+  ],
+  /** Statuses that prevent opening a chat */
+  chatStatuses: [
+    'Жалоба одобрена',
+    'Исключен из рейтинга',
+    'Исключён из рейтинга',
+    'Дополнен',
+    'Снят с публикации'
+  ]
+};
 
 /**
  * Menu Button (Three Dots) - Action menu trigger
@@ -347,6 +381,7 @@ window.SELECTORS = {
   STATUS: STATUS_SELECTORS,
   KNOWN_STATUSES,
   BLOCKING_STATUSES,
+  REVIEW_BLOCKING,
   MENU_BUTTON: MENU_BUTTON_SELECTORS,
   DROPDOWN: DROPDOWN_SELECTORS,
   COMPLAINT_BUTTON: COMPLAINT_BUTTON_SELECTORS,

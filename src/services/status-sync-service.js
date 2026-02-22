@@ -12,6 +12,11 @@ import { settingsService } from './settings-service.js';
 
 /**
  * Статусы жалоб, которые блокируют подачу новой жалобы
+ *
+ * IMPORTANT: Keep in sync with REVIEW_BLOCKING.complaintStatuses
+ * in src/contents/complaints/dom/selectors.catalog.js
+ *
+ * This file is an ES module (Service Worker) and cannot access window.SELECTORS.
  */
 const COMPLAINT_STATUSES = [
   'Жалоба отклонена',
@@ -199,7 +204,8 @@ export class StatusSyncService {
       reviewDate: review.reviewDate,
       statuses: statuses,
       canSubmitComplaint: this._canSubmitComplaint(statuses),
-      chatStatus: review.chatStatus || null
+      chatStatus: review.chatStatus || null,
+      ratingExcluded: review.ratingExcluded || false
     };
   }
 
