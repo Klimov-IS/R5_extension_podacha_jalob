@@ -549,15 +549,25 @@ class OptimizedHandler {
             const rows2 = table2 ? table2.querySelectorAll('[class*="table-row"]') : [];
             const rowCount = rows2.length || lastRowCount;
 
-            // Если нужны кнопки чата — проверяем что SVG иконки уже отрисованы
+            // Если нужны кнопки чата — дополнительно ждём SVG иконки (макс 5с)
             if (requireChatButtons && rows2.length > 0) {
-              const chatBtn = window.ElementFinder.findChatButton(rows2[0]);
-              if (!chatBtn) {
-                console.log('[_waitForTableReady] Строки есть, но кнопки чата ещё не отрисованы, ждём...');
+              const chatBtnWaitStart = Date.now();
+              const chatBtnMaxWait = 5000; // макс 5с на ожидание иконок
+              let chatBtnFound = false;
+
+              while (Date.now() - chatBtnWaitStart < chatBtnMaxWait) {
+                const chatBtn = window.ElementFinder.findChatButton(rows2[0]);
+                if (chatBtn) {
+                  chatBtnFound = true;
+                  console.log('[_waitForTableReady] Кнопки чата отрисованы ✓');
+                  break;
+                }
                 await window.WBUtils.sleep(500);
-                continue;
               }
-              console.log('[_waitForTableReady] Кнопки чата отрисованы ✓');
+
+              if (!chatBtnFound) {
+                console.warn('[_waitForTableReady] Кнопки чата не появились за 5с — продолжаем без них (возможно страница пустая или нет отзывов)');
+              }
             }
 
             return { rows: rowCount };
@@ -676,11 +686,13 @@ class OptimizedHandler {
           continue;
         }
 
-        // Ждём реальной загрузки таблицы (вместо надежды на 7.5с sleep)
-        // Если есть задачи на чаты — дополнительно ждём рендеринга SVG иконок чатов
+        // Ждём реальной загрузки таблицы после поиска
+        // ВАЖНО: НЕ требуем кнопки чата здесь — текущий таб может быть пустой,
+        // а отзывы будут на другом табе (Есть ответ / Ждут ответа).
+        // requireChatButtons используется внутри tab loop при переключении.
         const hasChatTasks = (articleData.chatOpens || []).length > 0;
-        console.log(`[TW]   Ожидание загрузки таблицы...${hasChatTasks ? ' (+ ожидание кнопок чата)' : ''}`);
-        const tableReady = await this._waitForTableReady(15000, { requireChatButtons: hasChatTasks });
+        console.log(`[TW]   Ожидание загрузки таблицы...`);
+        const tableReady = await this._waitForTableReady(15000);
         if (!tableReady) {
           console.error(`[TW]   Таблица не загрузилась за 15с после поиска`);
           report.articleResults.push(articleResult);
