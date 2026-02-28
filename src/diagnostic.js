@@ -11,6 +11,39 @@
 const MAX_ROUNDS_SAFETY = 50; // Safety cap против бесконечного цикла
 
 // ========================================================================
+// STALL DETECTION HELPERS
+// ========================================================================
+
+/**
+ * Извлечь множество ключей задач из ответа API
+ * Используется для сравнения задач между раундами
+ */
+function extractTaskKeys(tasks) {
+  const keys = new Set();
+  const articles = tasks.articles || {};
+  for (const [articleId, articleTasks] of Object.entries(articles)) {
+    for (const sp of (articleTasks.statusParses || [])) {
+      keys.add(`sp:${sp.reviewKey}`);
+    }
+    for (const ch of (articleTasks.chatOpens || [])) {
+      keys.add(`ch:${ch.reviewKey}`);
+    }
+    for (const c of (articleTasks.complaints || [])) {
+      keys.add(`co:${c.reviewKey}`);
+    }
+  }
+  return keys;
+}
+
+function setsEqual(a, b) {
+  if (a.size !== b.size) return false;
+  for (const item of a) {
+    if (!b.has(item)) return false;
+  }
+  return true;
+}
+
+// ========================================================================
 // DOM ЭЛЕМЕНТЫ
 // ========================================================================
 
@@ -24,8 +57,6 @@ const progressBar = document.getElementById('progress-bar');
 const progressText = document.getElementById('progress-text');
 const errorMessage = document.getElementById('error-message');
 const errorText = document.getElementById('error-text');
-const resultsCard = document.getElementById('results-card');
-const resultsBody = document.getElementById('results-body');
 const previewCard = document.getElementById('preview-card');
 const previewAccordion = document.getElementById('preview-accordion');
 const btnRefreshStores = document.getElementById('btn-refresh-stores');
@@ -124,7 +155,6 @@ storeSelect.addEventListener('change', () => {
   // Сбрасываем состояние при смене магазина
   if (hasSelection) {
     hideError();
-    hideResults();
     hidePreview();
     complaintsInfo.classList.add('hidden');
     taskTypeSelector.classList.remove('active');
@@ -184,7 +214,6 @@ async function getTasks() {
   btnGetTasks.disabled = true;
   btnGetTasks.textContent = '⏳ Загрузка...';
   hideError();
-  hideResults();
 
   try {
     const apiResponse = await chrome.runtime.sendMessage({
@@ -289,19 +318,7 @@ async function submitTasks() {
   previewAccordion.innerHTML = '';
   showProgress('Поиск вкладки WB...');
 
-  // Накопительная статистика за все раунды
-  const totalStats = {
-    rounds: 0,
-    totalReviewsSynced: 0,
-    chatsOpened: 0,
-    chatErrors: 0,
-    complaintsSubmitted: 0,
-    complaintsSkipped: 0,
-    complaintsErrors: 0,
-    uniqueArticles: new Set(),
-    tabSwitches: 0,
-    overallStatus: 'COMPLETED'
-  };
+  let overallStatus = 'COMPLETED';
 
   try {
     // 1. Найти WB вкладку (один раз перед циклом)
@@ -329,6 +346,7 @@ async function submitTasks() {
     // МНОГОРАУНДОВЫЙ ЦИКЛ
     // ========================================================================
     let round = 1;
+    let previousTaskKeys = null;
 
     while (round <= MAX_ROUNDS_SAFETY) {
       updateProgress(10 + (round - 1) * 2, `Раунд ${round}: Получение задач...`);
@@ -341,7 +359,7 @@ async function submitTasks() {
 
       if (!apiResponse || apiResponse.error) {
         console.error('[Diagnostic] Ошибка API:', apiResponse?.error);
-        totalStats.overallStatus = 'ERROR: API failed';
+        overallStatus = 'ERROR: API failed';
         break;
       }
 
@@ -351,9 +369,18 @@ async function submitTasks() {
 
       // Условие выхода: 0 задач
       if (roundTotal === 0) {
-        totalStats.overallStatus = 'SUCCESS: Все задачи обработаны';
+        overallStatus = 'SUCCESS: Все задачи обработаны';
         break;
       }
+
+      // Детекция застревания: задачи не изменились с прошлого раунда
+      const currentTaskKeys = extractTaskKeys(tasks);
+      if (previousTaskKeys && setsEqual(currentTaskKeys, previousTaskKeys)) {
+        console.warn(`[Diagnostic] Раунд ${round}: задачи идентичны предыдущему раунду (${currentTaskKeys.size} задач). Прогресса нет — останавливаемся.`);
+        overallStatus = `DONE: Оставшиеся ${currentTaskKeys.size} задач не найдены на площадке`;
+        break;
+      }
+      previousTaskKeys = currentTaskKeys;
 
       updateProgress(
         15 + (round - 1) * 2,
@@ -370,30 +397,15 @@ async function submitTasks() {
 
       if (!response.success) {
         console.error('[Diagnostic] Ошибка обработки:', response.error);
-        totalStats.overallStatus = `ERROR: ${response.error || 'Processing failed'}`;
+        overallStatus = `ERROR: ${response.error || 'Processing failed'}`;
         break;
       }
 
       const roundReport = response.report;
 
-      // 5. Накопить статистику
-      totalStats.rounds++;
-      totalStats.totalReviewsSynced += roundReport.totalReviewsSynced || 0;
-      totalStats.chatsOpened += roundReport.chatsOpened || 0;
-      totalStats.chatErrors += roundReport.chatErrors || 0;
-      totalStats.complaintsSubmitted += roundReport.complaintsSubmitted || 0;
-      totalStats.complaintsSkipped += roundReport.complaintsSkipped || 0;
-      totalStats.complaintsErrors += roundReport.complaintsErrors || 0;
-      totalStats.tabSwitches += roundReport.tabSwitches || 0;
-
-      // Собираем уникальные артикулы
-      if (roundReport.articleResults && Array.isArray(roundReport.articleResults)) {
-        roundReport.articleResults.forEach(a => totalStats.uniqueArticles.add(a.productId));
-      }
-
       // Если раунд был отменён
       if (roundReport.cancelled) {
-        totalStats.overallStatus = 'CANCELLED: Прервано пользователем';
+        overallStatus = 'CANCELLED: Прервано пользователем';
         break;
       }
 
@@ -408,33 +420,20 @@ async function submitTasks() {
     }
 
     // Проверка на достижение safety cap
-    if (round > MAX_ROUNDS_SAFETY && totalStats.overallStatus === 'COMPLETED') {
-      totalStats.overallStatus = `WARNING: Достигнут safety-лимит ${MAX_ROUNDS_SAFETY} раундов`;
+    if (round > MAX_ROUNDS_SAFETY && overallStatus === 'COMPLETED') {
+      overallStatus = `WARNING: Достигнут safety-лимит ${MAX_ROUNDS_SAFETY} раундов`;
     }
 
-    // 7. Показать итоговые результаты
+    // 7. Завершение
     hideProgress();
-    displayResults({
-      rounds: totalStats.rounds,
-      totalReviewsSynced: totalStats.totalReviewsSynced,
-      chatsOpened: totalStats.chatsOpened,
-      chatErrors: totalStats.chatErrors,
-      complaintsSubmitted: totalStats.complaintsSubmitted,
-      complaintsSkipped: totalStats.complaintsSkipped,
-      complaintsErrors: totalStats.complaintsErrors,
-      uniqueArticles: totalStats.uniqueArticles.size,
-      tabSwitches: totalStats.tabSwitches,
-      overallStatus: totalStats.overallStatus
-    });
+    console.log(`[Diagnostic] Завершено: ${overallStatus}`);
 
   } catch (error) {
     console.error('[Diagnostic] Ошибка:', error);
     hideProgress();
     showError(error.message);
   } finally {
-    // Memory cleanup
     loadedTasks = null;
-    totalStats.uniqueArticles.clear();
     resetUI();
   }
 }
@@ -465,10 +464,6 @@ function updateProgress(percent, text) {
 
 function hideProgress() {
   progressSection.classList.remove('active');
-}
-
-function hideResults() {
-  resultsCard.classList.remove('active');
 }
 
 function hidePreview() {
@@ -600,106 +595,3 @@ function resetUI() {
   btnSubmit.textContent = '▶️ Запустить';
 }
 
-// ========================================================================
-// ОТОБРАЖЕНИЕ РЕЗУЛЬТАТОВ
-// ========================================================================
-
-function displayResults(report) {
-  resultsCard.classList.add('active');
-
-  const rows = [
-    {
-      label: 'Раундов выполнено',
-      value: report.rounds || 1,
-      status: 'info',
-      statusText: 'Выполнено'
-    },
-    {
-      label: 'Уникальных артикулов',
-      value: report.uniqueArticles || 0,
-      status: 'info',
-      statusText: 'Обработано'
-    },
-    {
-      label: 'Отзывов синхронизировано (статусы)',
-      value: report.totalReviewsSynced || 0,
-      status: 'info',
-      statusText: 'Синхронизировано'
-    },
-    {
-      label: 'Чатов открыто',
-      value: report.chatsOpened || 0,
-      status: report.chatsOpened > 0 ? 'success' : 'info',
-      statusText: report.chatsOpened > 0 ? 'Успешно' : 'Нет'
-    },
-    {
-      label: 'Ошибки чатов',
-      value: report.chatErrors || 0,
-      status: report.chatErrors > 0 ? 'error' : 'success',
-      statusText: report.chatErrors > 0 ? 'Ошибка' : 'Нет ошибок'
-    },
-    {
-      label: 'Жалоб подано успешно',
-      value: report.complaintsSubmitted || 0,
-      status: report.complaintsSubmitted > 0 ? 'success' : 'warning',
-      statusText: report.complaintsSubmitted > 0 ? 'Успешно' : 'Нет'
-    },
-    {
-      label: 'Жалоб пропущено',
-      value: report.complaintsSkipped || 0,
-      status: 'info',
-      statusText: 'Пропущено'
-    },
-    {
-      label: 'Ошибки жалоб',
-      value: report.complaintsErrors || 0,
-      status: report.complaintsErrors > 0 ? 'error' : 'success',
-      statusText: report.complaintsErrors > 0 ? 'Ошибка' : 'Нет ошибок'
-    },
-    {
-      label: 'Переключений вкладок',
-      value: report.tabSwitches || 0,
-      status: 'info',
-      statusText: 'Навигация'
-    }
-  ];
-
-  let html = '';
-  rows.forEach(row => {
-    const badgeClass = `badge-${row.status}`;
-    const dotClass = row.status === 'success' ? 'green' :
-                     row.status === 'error' ? 'red' :
-                     row.status === 'warning' ? 'yellow' : 'blue';
-
-    html += `
-      <tr>
-        <td>${row.label}</td>
-        <td><strong>${row.value}</strong></td>
-        <td>
-          <span class="badge ${badgeClass}">
-            <span class="status-dot ${dotClass}"></span>
-            ${row.statusText}
-          </span>
-        </td>
-      </tr>
-    `;
-  });
-
-  // Итоговый статус
-  const overallStatus = report.overallStatus || 'COMPLETED';
-  const isSuccess = overallStatus.includes('SUCCESS');
-  const isCancelled = overallStatus.includes('CANCELLED');
-
-  html += `
-    <tr style="background: ${isSuccess ? '#d1fae5' : isCancelled ? '#fef3c7' : '#fee2e2'};">
-      <td><strong>Итог</strong></td>
-      <td colspan="2">
-        <strong style="color: ${isSuccess ? '#059669' : isCancelled ? '#d97706' : '#dc2626'};">
-          ${overallStatus}
-        </strong>
-      </td>
-    </tr>
-  `;
-
-  resultsBody.innerHTML = html;
-}

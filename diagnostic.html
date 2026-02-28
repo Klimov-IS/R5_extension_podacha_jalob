@@ -231,98 +231,6 @@
       text-align: center;
     }
 
-    /* Results Card */
-    .results-card {
-      background: white;
-      border-radius: 16px;
-      padding: 24px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-      display: none;
-    }
-
-    .results-card.active {
-      display: block;
-    }
-
-    .results-title {
-      font-size: 16px;
-      font-weight: 600;
-      margin-bottom: 16px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .results-table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-
-    .results-table th,
-    .results-table td {
-      padding: 12px 16px;
-      text-align: left;
-      border-bottom: 1px solid #f3f4f6;
-    }
-
-    .results-table th {
-      font-size: 12px;
-      font-weight: 500;
-      color: #6b7280;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .results-table td {
-      font-size: 14px;
-    }
-
-    .results-table tr:last-child td {
-      border-bottom: none;
-    }
-
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 12px;
-      border-radius: 20px;
-      font-size: 13px;
-      font-weight: 500;
-    }
-
-    .badge-success {
-      background: #d1fae5;
-      color: #059669;
-    }
-
-    .badge-error {
-      background: #fee2e2;
-      color: #dc2626;
-    }
-
-    .badge-info {
-      background: #e0f2fe;
-      color: #0284c7;
-    }
-
-    .badge-warning {
-      background: #fef3c7;
-      color: #d97706;
-    }
-
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      display: inline-block;
-    }
-
-    .status-dot.green { background: #10b981; }
-    .status-dot.red { background: #ef4444; }
-    .status-dot.yellow { background: #f59e0b; }
-    .status-dot.blue { background: #3b82f6; }
-
     /* Error State */
     .error-message {
       background: #fee2e2;
@@ -630,25 +538,6 @@
       <div id="preview-accordion">
         <!-- Accordion items will be inserted here -->
       </div>
-    </div>
-
-    <!-- Results -->
-    <div id="results-card" class="results-card">
-      <div class="results-title">
-        📊 Результаты
-      </div>
-      <table class="results-table">
-        <thead>
-          <tr>
-            <th>Метрика</th>
-            <th>Значение</th>
-            <th>Статус</th>
-          </tr>
-        </thead>
-        <tbody id="results-body">
-          <!-- Results will be inserted here -->
-        </tbody>
-      </table>
     </div>
 
     <div class="footer">

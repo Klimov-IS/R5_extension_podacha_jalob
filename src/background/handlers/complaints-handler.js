@@ -7,7 +7,6 @@
  */
 
 import { pilotAPI } from '../../api/pilot-api.js';
-import { apiSessionTracker } from '../../services/api-session-tracker.js';
 
 /**
  * Handler для операций с жалобами
@@ -26,18 +25,6 @@ export class ComplaintsHandler {
 
     try {
       const data = await pilotAPI.getComplaints(storeId, { skip, take });
-
-      // Записываем в трекер для отчетов
-      if (data && Array.isArray(data)) {
-        // Если это первый батч (skip = 0) - начинаем новую сессию
-        if (skip === 0) {
-          apiSessionTracker.startSession(storeId);
-        }
-
-        const batchNumber = Math.floor(skip / take);
-        apiSessionTracker.recordReceivedComplaints(batchNumber, skip, take, data);
-      }
-
       return { data };
 
     } catch (err) {
@@ -81,22 +68,10 @@ export class ComplaintsHandler {
 
     try {
       const data = await pilotAPI.markComplaintAsSent(storeId, reviewId);
-
-      // Записываем успешную отправку в трекер
-      apiSessionTracker.recordSentComplaint(reviewId, true, 200);
-
       return { data };
 
     } catch (err) {
       console.error('[ComplaintsHandler] ❌ Ошибка при отправке жалобы:', err);
-
-      // Пытаемся извлечь HTTP статус из ошибки
-      const statusMatch = err.message.match(/HTTP (\d+)/);
-      const status = statusMatch ? parseInt(statusMatch[1]) : 0;
-
-      // Записываем неудачную попытку в трекер
-      apiSessionTracker.recordSentComplaint(reviewId, false, status);
-
       return { error: err.message };
     }
   }

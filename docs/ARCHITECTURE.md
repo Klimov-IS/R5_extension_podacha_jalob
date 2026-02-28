@@ -34,7 +34,7 @@ This document describes the internal architecture of the Rating5 Chrome Extensio
 │  │   │   ├── ComplaintsHandler    (get/mark complaints)    │    │ │
 │  │   │   ├── StatusSyncHandler    (sync review statuses)   │    │ │
 │  │   │   ├── SettingsHandler      (manage configuration)   │    │ │
-│  │   │   ├── ReportsHandler       (API session stats)      │    │ │
+│  │   │   ├── ChatHandler          (chat operations)        │    │ │
 │  │   │   └── ReviewsHandler       (send reviews to API)    │    │ │
 │  │   └─────────────────────────────────────────────────────┘    │ │
 │  └───────────────────────────────────────────────────────────────┘ │
@@ -77,7 +77,7 @@ This document describes the internal architecture of the Rating5 Chrome Extensio
 │                      EXTERNAL SERVICES                              │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
-│   Backend API: http://158.160.217.236/api/...                      │
+│   Backend API: https://rating5.ru/api/...                      │
 │   ├── GET  /api/extension/stores/{storeId}/complaints              │
 │   ├── POST /api/extension/stores/{storeId}/complaints/{id}/sent    │
 │   └── POST /api/extension/review-statuses                          │
@@ -108,15 +108,16 @@ This document describes the internal architecture of the Rating5 Chrome Extensio
 | `handlers/complaints-handler.js` | Load complaints, mark as sent |
 | `handlers/status-sync-handler.js` | Sync review statuses to backend |
 | `handlers/settings-handler.js` | Configuration management |
-| `handlers/reports-handler.js` | API session statistics |
 | `handlers/reviews-handler.js` | Send reviews to external API |
+| `handlers/chat-handler.js` | Chat operations |
 
 **Message Types Handled:**
 - `getComplaints` — Load complaints from backend API
 - `sendComplaint` — Mark complaint as sent
+- `getTasks` — Get unified task list from backend
 - `syncReviewStatuses` — Send statuses to backend
 - `getSettings` / `SETTINGS_UPDATED` — Settings operations
-- `getAPIReport` / `resetAPISession` — Session management
+- `getChatRules` / `processChatTab` — Chat operations
 
 ### 3.2 Content Script — Isolated World
 

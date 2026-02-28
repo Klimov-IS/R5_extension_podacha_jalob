@@ -7,7 +7,6 @@
  */
 
 import { ComplaintsHandler } from './handlers/complaints-handler.js';
-import { ReportsHandler } from './handlers/reports-handler.js';
 import { ReviewsHandler } from './handlers/reviews-handler.js';
 import { SettingsHandler } from './handlers/settings-handler.js';
 import { StatusSyncHandler } from './handlers/status-sync-handler.js';
@@ -22,7 +21,6 @@ class MessageRouter {
     // Инициализируем все handlers
     this.handlers = {
       complaints: new ComplaintsHandler(),
-      reports: new ReportsHandler(),
       reviews: new ReviewsHandler(),
       settings: new SettingsHandler(),
       statusSync: new StatusSyncHandler(),
@@ -70,22 +68,6 @@ class MessageRouter {
         case 'getTasks':
           const tasks = await this.handlers.complaints.getTasks(message);
           sendResponse(tasks);
-          break;
-
-        // === REPORTS HANDLER ===
-        case 'getAPIReport':
-          const report = await this.handlers.reports.getAPIReport();
-          sendResponse(report);
-          break;
-
-        case 'resetAPISession':
-          const reset = await this.handlers.reports.resetAPISession();
-          sendResponse(reset);
-          break;
-
-        case 'getSessionState':
-          const state = await this.handlers.reports.getSessionState();
-          sendResponse(state);
           break;
 
         // === REVIEWS HANDLER ===
