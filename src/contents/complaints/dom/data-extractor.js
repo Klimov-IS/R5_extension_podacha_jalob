@@ -8,39 +8,84 @@
  * Используем полный timestamp для уникальной идентификации (может быть несколько
  * отзывов с одной датой, но время будет разное).
  *
+ * ФОРМАТЫ ДАТ WB:
+ * - Числовой (текущий): "14.08.2025 в 15:17"
+ * - Текстовый (старый): "19 февр. 2026 г. в 20:11"
+ * Оба формата могут встречаться на одной странице одновременно.
+ *
+ * TIMEZONE: WB показывает дату в LOCAL timezone браузера пользователя.
+ * Конвертация в UTC происходит через new Date() (не Date.UTC).
+ *
  * @module dom/data-extractor
  * @since 1.3.0 (28.01.2026)
- * @version 1.3.1 - Added datetime extraction
+ * @version 1.4.0 - Dual date format support, timezone-agnostic parsing
  */
 
 'use strict';
 
 /**
- * Parse WB datetime format to ISO 8601
-   * WB format: "14.08.2025 в 15:17"
-   * Output: "2025-08-14T15:17:00.000Z"
+   * Маппинг сокращённых русских месяцев → номер (0-indexed)
+   * Покрывает формы: "янв", "янв.", "января" и т.д.
+   */
+  const RUSSIAN_MONTHS_SHORT = {
+    'янв': 0, 'фев': 1, 'мар': 2, 'апр': 3,
+    'мая': 4, 'май': 4, 'июн': 5, 'июл': 6,
+    'авг': 7, 'сен': 8, 'окт': 9, 'ноя': 10, 'дек': 11
+  };
+
+  /**
+   * Parse WB datetime format to ISO 8601
+   *
+   * Поддерживает два формата:
+   * - Числовой (текущий):  "14.08.2025 в 15:17"
+   * - Текстовый (старый):  "19 февр. 2026 г. в 20:11"
+   *
+   * WB показывает дату в LOCAL timezone браузера пользователя.
+   * Используем new Date() (local) вместо Date.UTC(), чтобы
+   * .toISOString() корректно конвертировал в UTC из любого часового пояса.
    */
   function parseWBDatetime(wbDatetime) {
     if (!wbDatetime || typeof wbDatetime !== 'string') {
       return null;
     }
 
-    // Pattern: "14.08.2025 в 15:17"
-    const match = wbDatetime.match(/(\d{2})\.(\d{2})\.(\d{4})\s+в\s+(\d{2}):(\d{2})/);
+    let day, month, year, hours, minutes;
 
-    if (!match) {
-      return null;
+    // Format 1 (primary): "14.08.2025 в 15:17"
+    const numericMatch = wbDatetime.match(/(\d{2})\.(\d{2})\.(\d{4})\s+в\s+(\d{2}):(\d{2})/);
+
+    if (numericMatch) {
+      day = parseInt(numericMatch[1], 10);
+      month = parseInt(numericMatch[2], 10) - 1; // 0-indexed
+      year = parseInt(numericMatch[3], 10);
+      hours = parseInt(numericMatch[4], 10);
+      minutes = parseInt(numericMatch[5], 10);
+    } else {
+      // Format 2 (fallback): "19 февр. 2026 г. в 20:11"
+      const textMatch = wbDatetime.match(/(\d{1,2})\s+(янв|фев|мар|апр|мая|май|июн|июл|авг|сен|окт|ноя|дек)\S*\s+(\d{4})\s*г\.\s*в\s*(\d{2}):(\d{2})/);
+
+      if (!textMatch) {
+        return null;
+      }
+
+      day = parseInt(textMatch[1], 10);
+      const monthPrefix = textMatch[2].toLowerCase();
+      month = RUSSIAN_MONTHS_SHORT[monthPrefix];
+      year = parseInt(textMatch[3], 10);
+      hours = parseInt(textMatch[4], 10);
+      minutes = parseInt(textMatch[5], 10);
+
+      if (month === undefined) {
+        console.warn('[DataExtractor] parseWBDatetime: unknown month prefix', monthPrefix);
+        return null;
+      }
     }
 
-    const day = parseInt(match[1], 10);
-    const month = parseInt(match[2], 10) - 1; // Months are 0-indexed
-    const year = parseInt(match[3], 10);
-    const hours = parseInt(match[4], 10);
-    const minutes = parseInt(match[5], 10);
-
     try {
-      // WB показывает время в MSK (UTC+3), конвертируем в UTC
-      const date = new Date(Date.UTC(year, month, day, hours - 3, minutes, 0, 0));
+      // WB показывает дату в LOCAL timezone браузера.
+      // new Date(year, month, ...) создаёт дату в local timezone,
+      // .toISOString() автоматически конвертирует в UTC.
+      const date = new Date(year, month, day, hours, minutes, 0, 0);
 
       if (isNaN(date.getTime())) {
         return null;
@@ -60,8 +105,10 @@
     /**
      * Получить дату и время отзыва из строки таблицы
      *
-     * WB формат (январь 2026): "27.01.2026 в 15:05"
-     * Возвращает ISO 8601: "2026-01-27T12:05:00.000Z"
+     * WB форматы:
+     * - Числовой: "27.01.2026 в 15:05"
+     * - Текстовый: "19 февр. 2026 г. в 20:11"
+     * Возвращает ISO 8601 в UTC
      *
      * СТРУКТУРА HTML:
      * <span class="Text__xxx" data-name="Text">27.01.2026 в 15:05</span>
@@ -74,12 +121,14 @@
         // Ищем все span с data-name="Text" - WB использует этот атрибут для текстовых элементов
         const textSpans = row.querySelectorAll('span[data-name="Text"]');
 
-        // Паттерн даты WB: "27.01.2026 в 15:05"
-        const datePattern = /\d{2}\.\d{2}\.\d{4}\s+в\s+\d{2}:\d{2}/;
+        // Паттерн 1 (текущий): "27.01.2026 в 15:05"
+        const numericDatePattern = /\d{2}\.\d{2}\.\d{4}\s+в\s+\d{2}:\d{2}/;
+        // Паттерн 2 (старый):   "19 февр. 2026 г. в 20:11"
+        const textDatePattern = /\d{1,2}\s+(?:янв|фев|мар|апр|мая|май|июн|июл|авг|сен|окт|ноя|дек)\S*\s+\d{4}\s*г\.\s*в\s*\d{2}:\d{2}/;
 
         for (const span of textSpans) {
           const text = span.textContent.trim();
-          if (datePattern.test(text)) {
+          if (numericDatePattern.test(text) || textDatePattern.test(text)) {
             // Парсим WB формат в ISO 8601
             const isoDate = parseWBDatetime(text);
 
@@ -309,13 +358,14 @@
         // Текст отзыва обычно в span[data-name="Text"] внутри ячейки с длинным текстом
         const textSpans = row.querySelectorAll('span[data-name="Text"]');
 
-        // Паттерн даты - исключаем эти span
-        const datePattern = /\d{2}\.\d{2}\.\d{4}\s+в\s+\d{2}:\d{2}/;
+        // Паттерны дат - исключаем эти span
+        const numericDatePattern = /\d{2}\.\d{2}\.\d{4}\s+в\s+\d{2}:\d{2}/;
+        const textDatePattern = /\d{1,2}\s+(?:янв|фев|мар|апр|мая|май|июн|июл|авг|сен|окт|ноя|дек)\S*\s+\d{4}\s*г\.\s*в\s*\d{2}:\d{2}/;
 
         for (const span of textSpans) {
           const text = span.textContent.trim();
           // Пропускаем дату, короткие тексты и служебные надписи
-          if (datePattern.test(text)) continue;
+          if (numericDatePattern.test(text) || textDatePattern.test(text)) continue;
           if (text.length < 10) continue;
           if (text.includes('Оставить ответ')) continue;
           if (text.includes('Отзыв оставили конкуренты')) continue;
@@ -375,10 +425,10 @@
      *
      * Кнопка чата имеет 3 состояния:
      * - Прозрачная (disabled): "chat_not_activated" — функция чатов не активирована в кабинете
-     * - Серая (активная): "chat_available" — можно открыть новый чат
-     * - Чёрная (активная): "chat_opened" — чат уже открыт
+     * - Тёмная/чёрная (активная): "chat_available" — можно открыть новый чат
+     * - Светлая/белая (активная): "chat_opened" — чат уже открыт
      *
-     * Различаем серую и чёрную кнопки по яркости computed color (CSS классы нестабильны).
+     * Различаем тёмную и светлую кнопки по яркости computed color (CSS классы нестабильны).
      * SVG использует fill="currentColor", поэтому цвет наследуется от CSS color кнопки.
      *
      * @param {HTMLElement} row - строка таблицы
@@ -407,10 +457,10 @@
           return 'chat_available';
         }
 
-        // Порог яркости: чёрная кнопка (opened) < 0.4, серая (available) >= 0.4
+        // Порог яркости: светлая/белая кнопка (opened) >= 0.4, тёмная/чёрная (available) < 0.4
         const LUMINANCE_THRESHOLD = window.SELECTORS?.CHAT_STATUS_DETECTION?.luminanceThreshold ?? 0.4;
 
-        return luminance < LUMINANCE_THRESHOLD ? 'chat_opened' : 'chat_available';
+        return luminance >= LUMINANCE_THRESHOLD ? 'chat_opened' : 'chat_available';
 
       } catch (error) {
         console.error('[DataExtractor] Ошибка при определении статуса чата:', error);

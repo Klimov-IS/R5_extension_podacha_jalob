@@ -484,7 +484,8 @@ Within each review row on a page:
 
 1. **statusParses** (passive): Collect review data for sync — always happens
 2. **chatOpens**: If row matches chatOpensMap → `ChatService.openChat()` or link chat
-3. **complaints**: If row matches complaintsMap and no blocking status → `ComplaintService.submitComplaint()`
+3. **retroactiveLinks** (Phase 2.5): If `chatStatus === 'chat_opened'` AND no matching chatOpens task → auto-add to pipeline for retroactive linking via `POST /api/extension/chat/opened` (idempotent)
+4. **complaints**: If row matches complaintsMap and no blocking status → `ComplaintService.submitComplaint()`
 
 ### 3b.5 Key Matching
 
@@ -500,6 +501,8 @@ Match is exact string comparison.
   totalReviewsSynced: 150,
   chatsOpened: 12,
   chatErrors: 1,
+  retroactiveLinksDetected: 5,
+  retroactiveLinksOpened: 4,
   complaintsSubmitted: 45,
   complaintsSkipped: 3,
   complaintsErrors: 2,

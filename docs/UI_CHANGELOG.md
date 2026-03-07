@@ -19,6 +19,142 @@ Each entry should include:
 
 ## 2026
 
+### March 2026
+
+#### 2026-03-07: chatId URL Validation + ratingExcluded Scoping
+
+**Change Type:** Bug Fix (chat linking reliability + ratingExcluded enforcement)
+
+**What Changed:**
+
+1. **chatId URL validation (`chat-handler.js`):**
+   - `processChatTab()` now waits up to 15s for `chatId=` to appear in the tab URL
+   - Previously: took URL after 6s render wait, even if WB hadn't finished client-side redirect
+   - Root cause of 56 duplicate `review_chat_links`: URL without chatId → backend `reconcileChatWithLink()` matched wrong records
+   - Fallback: if chatId never appears, proceeds with warning log
+
+2. **ratingExcluded — scoped blocking:**
+   - `type="open"` → blocked by `ratingExcluded` (не открываем новый чат для исключённого отзыва)
+   - `type="link"` → **НЕ** блокируется (чат уже открыт → привязываем, чтобы бэкенд мог заблокировать общение)
+   - Phase 2.5 ретро-привязка → **НЕ** блокируется (аналогично link — чат уже открыт)
+   - Принцип: если чат УЖЕ открыт, всегда привязываем вне зависимости от блокаторов
+
+**Files Changed:**
+- `src/background/handlers/chat-handler.js` — chatId URL validation loop in `processChatTab()`
+- `src/contents/complaints/handlers/optimized-handler.js` — `ratingExcluded` scoped to `type="open"` only
+
+---
+
+#### 2026-03-04: Retroactive Chat Linking + Enhanced Chat Button Loading
+
+**Change Type:** Feature (chat linking + reliability)
+
+**What Changed:**
+
+1. **Retroactive chat linking (Phase 2.5):**
+   - When the extension detects `chat_opened` status on a review row that has NO matching chat task from backend → automatically clicks the button, opens the existing chat tab, captures the URL, and calls `POST /api/extension/chat/opened` to create the `review_chat_links` record
+   - Uses the existing pipeline (sequential clicks + parallel background processing)
+   - Does NOT check `ratingExcluded` — always links already-opened chats (backend needs the link to block communication)
+   - API is idempotent (UNIQUE on store_id + review_key) — safe for repeated calls
+   - New report counters: `retroactiveLinksDetected`, `retroactiveLinksOpened`
+
+2. **Enhanced chat button loading retry:**
+   - `_waitForTableReady()` now accepts `chatButtonRetryAttempts` parameter
+   - Each attempt polls for 5s with 500ms intervals
+   - When backend has chat tasks (`hasChatTasks`): 5 attempts (up to 25s total)
+   - Otherwise: 1 attempt (5s) for accurate chatStatus in status sync
+   - Chat buttons always waited for now (`requireChatButtons: true` always) — improves chatStatus accuracy
+
+3. **Always wait for chat buttons:**
+   - Previously: chat buttons only waited for when backend had chat tasks
+   - Now: always waited for (1 attempt = 5s for status-only, 5 attempts = 25s for chat tasks)
+   - Improves accuracy of `chatStatus` field in status sync payload
+
+**Files Changed:**
+- `src/contents/complaints/handlers/optimized-handler.js` — Phase 2.5 logic, `_waitForTableReady` retry, report counters, pipeline differentiation
+
+**Docs Updated:**
+- `docs/WORKFLOWS.md` — Phase 2.5 in per-row processing, report shape
+- `docs/TROUBLESHOOTING.md` — chat button loading section
+- `docs/UI_CHANGELOG.md` — this entry
+
+---
+
+#### 2026-03-03: Chat Link Tasks Bypass Blocking Statuses + reviewResolved API
+
+**Change Type:** Feature (chat linking logic)
+
+**What Changed:**
+
+1. **Chat link tasks (`type: "link"`) no longer blocked by review statuses:**
+   - Previously: both `"open"` and `"link"` chat tasks were skipped if the review had blocking statuses (`Жалоба одобрена`, `Снят с публикации`, `Исключён из рейтинга`, `Дополнен`) or `ratingExcluded` flag
+   - Now: `"link"` tasks bypass these checks — the extension always opens the chat to link it
+   - Backend auto-closes resolved chats, so the extension's job is just to link once
+
+2. **Backend returns `reviewResolved` / `resolvedReason` in `POST /chat/opened` response:**
+   - Extension logs a warning when `reviewResolved=true`
+   - No blocking behavior — backend handles closure autonomously
+
+**Files Changed:**
+- `src/contents/complaints/handlers/optimized-handler.js` — pre-checks skip for `isLinkTask`
+- `src/background/handlers/chat-handler.js` — log `reviewResolved` / `resolvedReason`
+- `docs/BACKEND_API.md` — new response fields for `/chat/opened`
+
+---
+
+#### 2026-03-02: Dual Date Format Support + Timezone-Agnostic Parsing
+
+**Change Type:** Bug Fix (critical)
+
+**What Changed:**
+
+1. **WB changed date display format:**
+   - Old format (text): `"19 февр. 2026 г. в 20:11"`
+   - New format (numeric): `"31.01.2026 в 16:55"`
+   - Both formats may coexist on the same page
+
+2. **Timezone handling was hardcoded to Moscow (UTC+3):**
+   - `parseWBDatetime()` in `data-extractor.js` used `hours - 3` to convert MSK → UTC
+   - This only worked for users in Moscow timezone
+   - Users in other timezones (e.g. UTC+7 Thailand) got mismatched review keys → reviews silently not found
+
+3. **Two inconsistent `parseWBDatetime()` copies:**
+   - `data-extractor.js` subtracted 3 hours (MSK → UTC)
+   - `api-helpers.js` did not subtract (assumed UTC input)
+   - Same function name, different behavior
+
+**Impact:**
+- Reviews with old text dates → `getReviewDate()` returned `null` → complaints silently skipped
+- Users outside Moscow → review keys didn't match backend keys → all reviews not found
+- `getReviewText()` could capture old-format date strings as review text
+
+**Fix:**
+
+1. **Dual format support in `parseWBDatetime()`:**
+   - Primary: numeric `DD.MM.YYYY в HH:MM`
+   - Fallback: text `D месяц YYYY г. в HH:MM` (with Russian month abbreviations)
+   - Added `RUSSIAN_MONTHS_SHORT` mapping for abbreviated months
+
+2. **Timezone-agnostic parsing:**
+   - Replaced `Date.UTC(year, month, day, hours - 3, ...)` with `new Date(year, month, day, hours, minutes)`
+   - `new Date()` creates date in local browser timezone
+   - `.toISOString()` automatically converts to UTC
+   - Works correctly for any user timezone
+
+3. **Synchronized both `parseWBDatetime()` copies** — identical behavior now
+
+4. **Updated date patterns in `getReviewDate()` and `getReviewText()`** to match both formats
+
+**Files Updated:**
+- `src/contents/complaints/dom/data-extractor.js` — `parseWBDatetime()`, `getReviewDate()`, `getReviewText()`
+- `src/utils/api-helpers.js` — `parseWBDatetime()`
+- `src/contents/complaints/dom/selectors.catalog.js` — `DATETIME_SELECTORS` (added `patternText`)
+- `docs/DOM_CONTRACT.md` — DateTime section rewritten
+- `docs/SELECTORS.md` — DateTime section updated
+- `docs/UI_CHANGELOG.md` — this entry
+
+---
+
 ### February 2026
 
 #### 2026-02-22: Pipeline Chat Opening + Chat Button Wait Fix

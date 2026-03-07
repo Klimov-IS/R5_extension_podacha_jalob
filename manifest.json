@@ -6,7 +6,7 @@
   "permissions": ["activeTab", "scripting", "tabs", "storage"],
   "host_permissions": [
     "*://seller.wildberries.ru/*",
-    "http://158.160.217.236/*",
+    "https://rating5.ru/*",
     "https://wb-reputation-2.ru/*"
   ],
   "icons": {

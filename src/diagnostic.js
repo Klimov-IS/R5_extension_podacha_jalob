@@ -110,9 +110,15 @@ async function loadStores(forceRefresh = false) {
       const option = document.createElement('option');
       option.value = store.id;
 
-      // Форматируем количество жалоб к подаче (API v1.2.0)
-      const count = store.draftComplaintsCount || 0;
-      const countText = count === 0 ? '' : ` — ${count} жалоб`;
+      // Форматируем счётчики задач (API v1.3.0)
+      const complaints = store.draftComplaintsCount || 0;
+      const chats = store.pendingChatsCount || 0;
+      const statusParses = store.pendingStatusParsesCount || 0;
+      const parts = [];
+      if (complaints > 0) parts.push(`${complaints} жалоб`);
+      if (chats > 0) parts.push(`${chats} чатов`);
+      if (statusParses > 0) parts.push(`${statusParses} статусов`);
+      const countText = parts.length > 0 ? ` — ${parts.join(', ')}` : '';
       option.textContent = store.name + countText;
 
       storeSelect.appendChild(option);
@@ -435,6 +441,14 @@ async function submitTasks() {
   } finally {
     loadedTasks = null;
     resetUI();
+
+    // Обновляем счётчик жалоб в дропдауне магазинов
+    const selectedStoreId = storeSelect.value;
+    await loadStores(true);
+    // Восстанавливаем выбранный магазин
+    if (selectedStoreId) {
+      storeSelect.value = selectedStoreId;
+    }
   }
 }
 

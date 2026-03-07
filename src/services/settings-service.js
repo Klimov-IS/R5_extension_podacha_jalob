@@ -71,7 +71,7 @@ class SettingsService {
    */
   async getBackendEndpoint() {
     const settings = await this.getSettings();
-    const defaultEndpoint = 'http://158.160.217.236';
+    const defaultEndpoint = 'https://rating5.ru';
     const endpoint = settings?.backendEndpoint || defaultEndpoint;
 
     return endpoint;

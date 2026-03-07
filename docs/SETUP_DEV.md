@@ -273,7 +273,7 @@ Currently no environment variables required. All configuration is hardcoded:
 
 | Setting | Value | Location |
 |---------|-------|----------|
-| Backend URL | `http://158.160.217.236` | settings-service.js |
+| Backend URL | `https://rating5.ru` | settings-service.js |
 | Backend Token | `wbrm_xxx...` | settings-service.js |
 | Batch Size | 200 | complaints-config.js |
 

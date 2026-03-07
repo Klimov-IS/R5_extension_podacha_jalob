@@ -73,7 +73,7 @@ The WB Seller Portal feedback management page where sellers can:
 | Data | Location | Format |
 |------|----------|--------|
 | Rating | Stars container | 1-5 active stars |
-| DateTime | Text span | "DD.MM.YYYY в HH:MM" |
+| DateTime | Text span | "DD.MM.YYYY в HH:MM" or "D месяц YYYY г. в HH:MM" |
 | Review text | Long text span | Free text |
 | Statuses | Chips elements | Array of strings |
 
@@ -81,7 +81,7 @@ The WB Seller Portal feedback management page where sellers can:
 - Each row has exactly one rating
 - Each row has exactly one datetime
 - Rating is 1-5 (no fractional)
-- Datetime uses Moscow timezone (UTC+3)
+- Datetime displayed in user's local browser timezone
 
 ---
 
@@ -115,7 +115,7 @@ For matching, seconds are removed:
 **Invariants:**
 - Key uniqueness depends on review timing precision
 - Multiple reviews with same rating on same minute may collide (rare)
-- WB shows MSK time, must convert to UTC
+- WB shows time in local browser timezone, converted to UTC via `new Date()` + `.toISOString()`
 
 ---
 
@@ -163,28 +163,35 @@ Detection: `DataExtractor.isRatingExcluded(row)` returns `true` for excluded rev
 **What it represents:** When the review was posted.
 
 **Required properties:**
-- Date in format DD.MM.YYYY
-- Time in format HH:MM
-- Displayed in Moscow timezone (UTC+3)
+- Date and time of review
+- Displayed in **local timezone of the user's browser** (NOT hardcoded Moscow)
 
-**Display format (January 2026):**
-```
-27.01.2026 в 15:05
-```
+**Display formats (may coexist on the same page):**
+
+| Format | Example | Status |
+|--------|---------|--------|
+| Числовой | `27.01.2026 в 15:05` | Текущий (с января 2026) |
+| Текстовый | `19 февр. 2026 г. в 20:11` | Старый (может встречаться) |
 
 **Conceptual identification:**
 - Span with `data-name="Text"` attribute
-- Text matching pattern: `\d{2}\.\d{2}\.\d{4}\s+в\s+\d{2}:\d{2}`
+- Numeric pattern: `\d{2}\.\d{2}\.\d{4}\s+в\s+\d{2}:\d{2}`
+- Text pattern: `\d{1,2}\s+(?:янв|фев|мар|...)\S*\s+\d{4}\s*г\.\s*в\s*\d{2}:\d{2}`
 
 **Alternative structure:**
 - Container: class `Col-date-time-with-readmark__`
 - Date: inside `date-with-marker` child
 - Time: separate span sibling
 
+**Timezone conversion:**
+- WB shows time in user's local browser timezone
+- Extension converts to UTC via `new Date(year, month, day, hours, minutes)` + `.toISOString()`
+- This works for any timezone automatically
+
 **Invariants:**
-- Always Moscow time (UTC+3)
 - Seconds not displayed (always :00 in parsed timestamp)
-- Format is consistent across all reviews
+- Both formats may appear on the same page simultaneously
+- Timezone is always the user's local browser timezone
 
 ---
 

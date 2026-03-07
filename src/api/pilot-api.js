@@ -4,7 +4,7 @@
  *
  * @version 1.3.0
  * @description Единая точка входа для всех запросов к Backend API
- * Обновлено для работы с новым backend: http://158.160.217.236
+ * Обновлено для работы с новым backend: https://rating5.ru
  */
 
 import { fetchWithRetry } from '../utils/fetch-retry.js';

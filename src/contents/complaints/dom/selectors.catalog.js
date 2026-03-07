@@ -49,10 +49,20 @@ const RATING_SELECTORS = {
 
 /**
  * DateTime Display - Review date and time
- * WB Format: "27.01.2026 в 15:05" (Moscow time, UTC+3)
+ *
+ * WB форматы (могут сосуществовать на одной странице):
+ * - Числовой (текущий): "27.01.2026 в 15:05"
+ * - Текстовый (старый): "19 февр. 2026 г. в 20:11"
+ *
+ * TIMEZONE: WB показывает дату в LOCAL timezone браузера пользователя.
  */
 const DATETIME_SELECTORS = {
   textSpan: 'span[data-name="Text"]',
+  // Числовой формат: "DD.MM.YYYY в HH:MM"
+  patternNumeric: /\d{2}\.\d{2}\.\d{4}\s+в\s+\d{2}:\d{2}/,
+  // Текстовый формат: "D месяц YYYY г. в HH:MM"
+  patternText: /\d{1,2}\s+(?:янв|фев|мар|апр|мая|май|июн|июл|авг|сен|окт|ноя|дек)\S*\s+\d{4}\s*г\.\s*в\s*\d{2}:\d{2}/,
+  /** @deprecated Use patternNumeric instead */
   pattern: /\d{2}\.\d{2}\.\d{4}\s+в\s+\d{2}:\d{2}/,
   containerFallback: '[class*="Col-date-time-with-readmark__"]',
   dateMarkerFallback: '[class*="date-with-marker"]'
@@ -364,6 +374,7 @@ const CHAT_TIMING = {
  * @see docs/TASK/TASK-20260222-parallel-chat-opening.md
  */
 const CHAT_PARALLEL = {
+  maxConcurrent: 5,           // Макс чатов в одном batch (защита памяти браузера)
   clickIntervalMs: 3000,      // Пауза между кликами по кнопкам чата (мс)
   urlCaptureTimeoutMs: 25000  // Макс ожидание window.open() после клика (мс)
 };

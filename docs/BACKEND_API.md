@@ -11,7 +11,7 @@ This document defines the API contract between the Chrome Extension and the Back
 ### 1.1 Base URL
 
 ```
-http://158.160.217.236
+https://rating5.ru
 ```
 
 **Note:** This is hardcoded in `src/config/complaints-config.js` and `src/services/settings-service.js`.
@@ -70,13 +70,17 @@ Content-Type: application/json
     "id": "store_123",
     "name": "Store Name",
     "isActive": true,
-    "draftComplaintsCount": 45
+    "draftComplaintsCount": 45,
+    "pendingChatsCount": 12,
+    "pendingStatusParsesCount": 8
   },
   {
     "id": "store_456",
     "name": "Another Store",
     "isActive": false,
-    "draftComplaintsCount": 0
+    "draftComplaintsCount": 0,
+    "pendingChatsCount": 0,
+    "pendingStatusParsesCount": 0
   }
 ]
 ```
@@ -88,10 +92,12 @@ Content-Type: application/json
 | id | string | Unique store identifier |
 | name | string | Human-readable store name |
 | isActive | boolean | Whether the store is active |
-| draftComplaintsCount | number | **NEW (v1.2.0):** Count of complaints in `draft` status for active products |
+| draftComplaintsCount | number | **(v1.2.0)** Count of complaints in `draft` status for active products |
+| pendingChatsCount | number | **(v1.3.0)** Count of pending chat tasks (open + link) for active products |
+| pendingStatusParsesCount | number | **(v1.3.0)** Count of reviews pending status parsing for active products |
 
-> **Note:** `draftComplaintsCount` only includes complaints for products with `work_status = 'active'`.
-> Products "on stop" are excluded from the count.
+> **Note:** All counts only include tasks for products with `work_status = 'active'`.
+> Products "on stop" are excluded from the counts.
 
 **Usage:** `diagnostic.js:loadStores()`
 
@@ -480,9 +486,34 @@ POST /api/extension/chat/opened
   "success": true,
   "chatRecordId": "uuid-here",
   "reviewMatched": true,
+  "reviewResolved": false,
+  "resolvedReason": null,
   "message": "Chat record created"
 }
 ```
+
+**Response Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| success | boolean | Whether the request succeeded |
+| chatRecordId | string | UUID of the chat record (used for anchor/error calls) |
+| reviewMatched | boolean | Whether the review was found in DB |
+| reviewResolved | boolean | **(v1.3.0)** `true` if the review no longer affects rating — backend auto-closes the chat |
+| resolvedReason | string\|null | **(v1.3.0)** Reason for resolution (see table below) |
+| message | string | Human-readable status message |
+
+**resolvedReason values:**
+
+| Value | Meaning |
+|-------|---------|
+| `complaint_approved` | Жалоба одобрена |
+| `review_excluded` | Исключён из рейтинга |
+| `review_unpublished` | Снят с публикации |
+| `review_temporarily_hidden` | Временно скрыт |
+| `review_deleted` | Удалён |
+| `rating_excluded` | Не влияет на рейтинг |
+| `null` | Review is not resolved |
 
 **HTTP Status:** 201 (new) or 200 (existing UPSERT).
 
@@ -737,7 +768,7 @@ const reviewKey = `${productId}_${rating}_${reviewDate}`;
 
 | Setting | Value | Location |
 |---------|-------|----------|
-| Base URL | `http://158.160.217.236` | settings-service.js |
+| Base URL | `https://rating5.ru` | settings-service.js |
 | Token | `wbrm_0ab7137430d4fb62948db3a7d9b4b997` | settings-service.js |
 | Batch size | 200 | complaints-config.js |
 | Status sync batch | 100 | status-sync-service.js |
@@ -783,7 +814,7 @@ Current API has no versioning. Endpoints are under `/api/`.
 ### Get Complaints
 ```bash
 curl -H "Authorization: Bearer wbrm_xxx" \
-  "http://158.160.217.236/api/extension/stores/STORE_ID/complaints?limit=100&filter=draft"
+  "https://rating5.ru/api/extension/stores/STORE_ID/complaints?limit=100&filter=draft"
 ```
 
 ### Mark as Sent (Pending)
@@ -792,7 +823,7 @@ curl -X POST \
   -H "Authorization: Bearer wbrm_xxx" \
   -H "Content-Type: application/json" \
   -d '{"sentAt":"2026-01-28T12:00:00.000Z"}' \
-  "http://158.160.217.236/api/extension/stores/STORE_ID/reviews/REVIEW_ID/complaint/sent"
+  "https://rating5.ru/api/extension/stores/STORE_ID/reviews/REVIEW_ID/complaint/sent"
 ```
 
 ### Sync Statuses
@@ -801,5 +832,5 @@ curl -X POST \
   -H "Authorization: Bearer wbrm_xxx" \
   -H "Content-Type: application/json" \
   -d '{"storeId":"xxx","reviews":[...]}' \
-  "http://158.160.217.236/api/extension/review-statuses"
+  "https://rating5.ru/api/extension/review-statuses"
 ```

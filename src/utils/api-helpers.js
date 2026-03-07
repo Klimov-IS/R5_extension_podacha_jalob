@@ -400,20 +400,30 @@ export function convertToISO(dateStr) {
 }
 
 /**
+ * Маппинг сокращённых русских месяцев → номер (0-indexed)
+ */
+const RUSSIAN_MONTHS_SHORT = {
+  'янв': 0, 'фев': 1, 'мар': 2, 'апр': 3,
+  'мая': 4, 'май': 4, 'июн': 5, 'июл': 6,
+  'авг': 7, 'сен': 8, 'окт': 9, 'ноя': 10, 'дек': 11
+};
+
+/**
  * Parse WB datetime format to ISO 8601
  *
- * WB shows datetime in format "DD.MM.YYYY в HH:MM" (e.g., "14.08.2025 в 15:17")
- * This function converts it to ISO 8601 format for matching with backend data.
+ * Поддерживает два формата:
+ * - Числовой (текущий): "14.08.2025 в 15:17"
+ * - Текстовый (старый): "19 февр. 2026 г. в 20:11"
  *
- * @param {string} wbDatetime - WB datetime string "DD.MM.YYYY в HH:MM"
+ * WB показывает дату в LOCAL timezone браузера.
+ * Используем new Date() (local), .toISOString() конвертирует в UTC.
+ *
+ * @param {string} wbDatetime - WB datetime string
  * @returns {string|null} - ISO 8601 string or null if invalid
  *
  * @example
  * parseWBDatetime('14.08.2025 в 15:17');
- * // Returns: "2025-08-14T15:17:00.000Z"
- *
- * parseWBDatetime('23.01.2026 в 08:38');
- * // Returns: "2026-01-23T08:38:00.000Z"
+ * parseWBDatetime('19 февр. 2026 г. в 20:11');
  */
 export function parseWBDatetime(wbDatetime) {
   if (!wbDatetime || typeof wbDatetime !== 'string') {
@@ -421,24 +431,44 @@ export function parseWBDatetime(wbDatetime) {
     return null;
   }
 
-  // Pattern: "14.08.2025 в 15:17"
-  const match = wbDatetime.match(/(\d{2})\.(\d{2})\.(\d{4})\s+в\s+(\d{2}):(\d{2})/);
+  let day, month, year, hours, minutes;
 
-  if (!match) {
-    console.warn('[api-helpers] parseWBDatetime: Does not match WB format', { wbDatetime });
-    return null;
+  // Format 1 (primary): "14.08.2025 в 15:17"
+  const numericMatch = wbDatetime.match(/(\d{2})\.(\d{2})\.(\d{4})\s+в\s+(\d{2}):(\d{2})/);
+
+  if (numericMatch) {
+    day = parseInt(numericMatch[1], 10);
+    month = parseInt(numericMatch[2], 10) - 1;
+    year = parseInt(numericMatch[3], 10);
+    hours = parseInt(numericMatch[4], 10);
+    minutes = parseInt(numericMatch[5], 10);
+  } else {
+    // Format 2 (fallback): "19 февр. 2026 г. в 20:11"
+    const textMatch = wbDatetime.match(/(\d{1,2})\s+(янв|фев|мар|апр|мая|май|июн|июл|авг|сен|окт|ноя|дек)\S*\s+(\d{4})\s*г\.\s*в\s*(\d{2}):(\d{2})/);
+
+    if (!textMatch) {
+      console.warn('[api-helpers] parseWBDatetime: Does not match any WB format', { wbDatetime });
+      return null;
+    }
+
+    day = parseInt(textMatch[1], 10);
+    const monthPrefix = textMatch[2].toLowerCase();
+    month = RUSSIAN_MONTHS_SHORT[monthPrefix];
+    year = parseInt(textMatch[3], 10);
+    hours = parseInt(textMatch[4], 10);
+    minutes = parseInt(textMatch[5], 10);
+
+    if (month === undefined) {
+      console.warn('[api-helpers] parseWBDatetime: unknown month', { monthPrefix });
+      return null;
+    }
   }
 
-  const day = parseInt(match[1], 10);
-  const month = parseInt(match[2], 10) - 1; // Months are 0-indexed
-  const year = parseInt(match[3], 10);
-  const hours = parseInt(match[4], 10);
-  const minutes = parseInt(match[5], 10);
-
   try {
-    // WB uses Moscow time (UTC+3), but we'll assume UTC for now
-    // If needed, adjust timezone later
-    const date = new Date(Date.UTC(year, month, day, hours, minutes, 0, 0));
+    // WB показывает дату в LOCAL timezone браузера.
+    // new Date(year, month, ...) создаёт дату в local timezone,
+    // .toISOString() автоматически конвертирует в UTC.
+    const date = new Date(year, month, day, hours, minutes, 0, 0);
 
     if (isNaN(date.getTime())) {
       console.error('[api-helpers] parseWBDatetime: Invalid date components', {

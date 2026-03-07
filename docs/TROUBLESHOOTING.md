@@ -266,13 +266,13 @@ document.querySelector('[class*="Complaint-form__buttons"] button')
 
 **Actions:**
 1. Check network connectivity
-2. Verify backend is reachable (`http://158.160.217.236/api/health`)
+2. Verify backend is reachable (`https://rating5.ru/api/health`)
 3. Check Chrome DevTools → Network for failed requests
 
 **Debug:**
 ```javascript
 // Test backend connection:
-fetch('http://158.160.217.236/api/health')
+fetch('https://rating5.ru/api/health')
   .then(r => r.json())
   .then(console.log)
   .catch(console.error);
@@ -398,7 +398,7 @@ console.log('Modules loaded:', {
 **Debug:**
 ```javascript
 // In diagnostic page console:
-fetch('http://158.160.217.236/api/extension/stores', {
+fetch('https://rating5.ru/api/extension/stores', {
   headers: { 'Authorization': 'Bearer wbrm_...' }
 }).then(r => r.json()).then(console.log);
 ```
@@ -425,7 +425,55 @@ fetch('http://158.160.217.236/api/extension/stores', {
 
 ---
 
-## 6. Performance Issues
+## 6. Chat Button Loading Issues
+
+### 6.1 Chat Buttons Not Rendering
+
+**Symptoms:**
+- Log: `[_waitForTableReady] Кнопки чата не появились за N попыток — продолжаем без них`
+- `chatStatus: null` in status sync for all reviews
+- Retroactive linking not detecting any `chat_opened` reviews
+
+**Probable Causes:**
+1. WB slow rendering of SVG icons (2-15s delay after table rows appear)
+2. WB cabinet does not have chat feature enabled
+3. Network latency affecting resource loading
+
+**Actions:**
+1. Check if chat buttons appear visually on the WB page (small icon next to three-dots menu)
+2. If buttons appear after a delay — the retry mechanism should catch them (up to 25s when chat tasks present, 5s otherwise)
+3. If buttons never appear — cabinet may not have chat feature enabled (`chat_not_activated`)
+
+**Debug:**
+```javascript
+// In WB page console:
+const rows = document.querySelectorAll('[class*="table-row"]');
+rows[0].querySelectorAll('button[class*="onlyIcon"]').forEach((btn, i) => {
+  const svg = btn.querySelector('svg');
+  console.log(`Button ${i}: viewBox="${svg?.getAttribute('viewBox')}", disabled=${btn.disabled}`);
+});
+// Chat button has viewBox="0 0 16 16"
+```
+
+### 6.2 Retroactive Linking Not Working
+
+**Symptoms:**
+- Log shows `retroactiveLinksDetected: 0` despite visible opened chats
+- No `РЕТРО-ПРИВЯЗКА` entries in console
+
+**Probable Causes:**
+1. Chat buttons didn't load (see 6.1) → `chatStatus` is `null` instead of `chat_opened`
+2. Backend already has tasks for these chats (`chatOpensMap` has matching keys)
+3. Circuit breaker activated (3 consecutive chat failures)
+
+**Actions:**
+1. Check console for `chatStatus` values in status sync data
+2. Verify button luminance detection: `getComputedStyle(button).color` should differ for opened vs available
+3. Check if circuit breaker message appears: `CIRCUIT BREAKER`
+
+---
+
+## 7. Performance Issues
 
 ### 6.1 Processing Too Slow
 
@@ -461,7 +509,7 @@ fetch('http://158.160.217.236/api/extension/stores', {
 
 ---
 
-## 7. Quick Reference: Error → Action
+## 8. Quick Reference: Error → Action
 
 | Error Message | First Action |
 |--------------|--------------|
@@ -480,7 +528,7 @@ fetch('http://158.160.217.236/api/extension/stores', {
 
 ---
 
-## 8. Getting Help
+## 9. Getting Help
 
 If issue persists:
 

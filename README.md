@@ -193,7 +193,7 @@ GET  /api/extension/review-statuses?storeId=...&limit=50
 
 ### Base URL
 ```
-http://158.160.217.236
+https://rating5.ru
 ```
 
 ### Endpoints
@@ -261,14 +261,14 @@ npm run format
 
 **Host Permissions:**
 - `*://seller.wildberries.ru/*`
-- `http://158.160.217.236/*`
+- `https://rating5.ru/*`
 
 ### Настройки
 
 Токен и endpoint Backend настраиваются в `src/services/settings-service.js`:
 ```javascript
 // Default endpoint
-const defaultEndpoint = 'http://158.160.217.236';
+const defaultEndpoint = 'https://rating5.ru';
 
 // Hardcoded token (временное решение)
 const HARDCODED_TOKEN = 'wbrm_0ab7137430d4fb62948db3a7d9b4b997';
@@ -289,7 +289,7 @@ const HARDCODED_TOKEN = 'wbrm_0ab7137430d4fb62948db3a7d9b4b997';
    ```
 
 ### Магазины не загружаются
-1. Проверьте доступность API: `http://158.160.217.236/api/extension/stores`
+1. Проверьте доступность API: `https://rating5.ru/api/extension/stores`
 2. Проверьте токен в settings-service.js
 
 ### Ошибка "Content script не отвечает"

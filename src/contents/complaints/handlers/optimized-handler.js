@@ -531,10 +531,12 @@ class OptimizedHandler {
      * @param {Object} options
      * @param {boolean} options.requireChatButtons - ждать ли появления SVG иконок чата в строках
      *   (иконки чатов рендерятся WB с задержкой 2-3с после основных данных)
+     * @param {number} options.chatButtonRetryAttempts - количество попыток ожидания кнопок чата
+     *   (каждая попытка = 5с polling, default 1). При наличии chat tasks от бэкенда — 5 попыток (до 25с)
      * @returns {Promise<{rows: number}|null>}
      */
     static async _waitForTableReady(maxWaitMs = 15000, options = {}) {
-      const { requireChatButtons = false } = options;
+      const { requireChatButtons = false, chatButtonRetryAttempts = 1 } = options;
       const start = Date.now();
       let lastRowCount = 0;
       while (Date.now() - start < maxWaitMs) {
@@ -549,24 +551,37 @@ class OptimizedHandler {
             const rows2 = table2 ? table2.querySelectorAll('[class*="table-row"]') : [];
             const rowCount = rows2.length || lastRowCount;
 
-            // Если нужны кнопки чата — дополнительно ждём SVG иконки (макс 5с)
+            // Если нужны кнопки чата — ждём SVG иконки с retry
             if (requireChatButtons && rows2.length > 0) {
-              const chatBtnWaitStart = Date.now();
-              const chatBtnMaxWait = 5000; // макс 5с на ожидание иконок
+              const SINGLE_ATTEMPT_MS = 5000;
+              const POLL_INTERVAL_MS = 500;
+              const maxAttempts = chatButtonRetryAttempts || 1;
               let chatBtnFound = false;
 
-              while (Date.now() - chatBtnWaitStart < chatBtnMaxWait) {
-                const chatBtn = window.ElementFinder.findChatButton(rows2[0]);
-                if (chatBtn) {
-                  chatBtnFound = true;
-                  console.log('[_waitForTableReady] Кнопки чата отрисованы ✓');
+              for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                const attemptStart = Date.now();
+
+                while (Date.now() - attemptStart < SINGLE_ATTEMPT_MS) {
+                  const chatBtn = window.ElementFinder.findChatButton(rows2[0]);
+                  if (chatBtn) {
+                    chatBtnFound = true;
+                    break;
+                  }
+                  await window.WBUtils.sleep(POLL_INTERVAL_MS);
+                }
+
+                if (chatBtnFound) {
+                  console.log(`[_waitForTableReady] Кнопки чата отрисованы ✓ (попытка ${attempt}/${maxAttempts})`);
                   break;
                 }
-                await window.WBUtils.sleep(500);
+
+                if (attempt < maxAttempts) {
+                  console.warn(`[_waitForTableReady] Кнопки чата не найдены (попытка ${attempt}/${maxAttempts}), retry...`);
+                }
               }
 
               if (!chatBtnFound) {
-                console.warn('[_waitForTableReady] Кнопки чата не появились за 5с — продолжаем без них (возможно страница пустая или нет отзывов)');
+                console.warn(`[_waitForTableReady] Кнопки чата не появились за ${maxAttempts} попыток — продолжаем без них`);
               }
             }
 
@@ -619,6 +634,9 @@ class OptimizedHandler {
         chatsOpened: 0,
         chatsSkipped: 0,
         chatErrors: 0,
+        // Retroactive linking (chat_opened без задачи от бэкенда)
+        retroactiveLinksDetected: 0,
+        retroactiveLinksOpened: 0,
         // Complaints
         complaintsRequested: tasks?.totals?.complaints || 0,
         complaintsSubmitted: 0,
@@ -687,12 +705,11 @@ class OptimizedHandler {
         }
 
         // Ждём реальной загрузки таблицы после поиска
-        // ВАЖНО: НЕ требуем кнопки чата здесь — текущий таб может быть пустой,
-        // а отзывы будут на другом табе (Есть ответ / Ждут ответа).
-        // requireChatButtons используется внутри tab loop при переключении.
+        // requireChatButtons: true всегда — для точного chatStatus в sync + ретроактивная привязка
+        // chatButtonRetryAttempts: 1 при начальной загрузке (текущий таб может быть пустой)
         const hasChatTasks = (articleData.chatOpens || []).length > 0;
         console.log(`[TW]   Ожидание загрузки таблицы...`);
-        const tableReady = await this._waitForTableReady(15000);
+        const tableReady = await this._waitForTableReady(15000, { requireChatButtons: true, chatButtonRetryAttempts: 1 });
         if (!tableReady) {
           console.error(`[TW]   Таблица не загрузилась за 15с после поиска`);
           report.articleResults.push(articleResult);
@@ -750,8 +767,10 @@ class OptimizedHandler {
             report.tabSwitches++;
 
             // Ждём загрузки новых данных после переключения
-            console.log(`[TW]   Ожидание загрузки таблицы после переключения...${hasChatTasks ? ' (+ кнопки чата)' : ''}`);
-            const tabReady = await this._waitForTableReady(10000, { requireChatButtons: hasChatTasks });
+            // hasChatTasks → 5 попыток (25с) для надёжной загрузки кнопок, иначе 1 попытка (5с)
+            const chatRetries = hasChatTasks ? 5 : 1;
+            console.log(`[TW]   Ожидание загрузки таблицы после переключения... (+ кнопки чата, retry=${chatRetries})`);
+            const tabReady = await this._waitForTableReady(10000, { requireChatButtons: true, chatButtonRetryAttempts: chatRetries });
             if (!tabReady) {
               console.warn(`[TW]   Таблица не загрузилась после переключения на "${targetTab}"`);
               break;
@@ -822,6 +841,10 @@ class OptimizedHandler {
 
                 console.log(`[TW]     Строка ${rowIdx + 1}: ЧАТЫ совпадение! type="${chatTask.type}" key=${normalizedKey} chatStatus="${reviewData.chatStatus}" statuses=[${statuses.join(', ')}]`);
 
+                // type="link" — связка существующего чата, пропускаем проверки статусов/рейтинга
+                // (бэкенд сам закроет resolved-чаты, наша задача — связать хотя бы раз)
+                const isLinkTask = chatTask.type === 'link';
+
                 // Circuit breaker: WB rate-limits chat creation heavily
                 if (chatCircuitBroken) {
                   console.warn(`[TW]     Строка ${rowIdx + 1}: ЧАТЫ пропуск — circuit breaker (${MAX_CONSECUTIVE_CHAT_FAILURES} провалов подряд)`);
@@ -832,14 +855,15 @@ class OptimizedHandler {
                   console.warn(`[TW]     Строка ${rowIdx + 1}: ЧАТЫ пропуск — кнопка disabled (chat_not_activated)`);
                   report.chatsSkipped++;
                   articleResult.chatsSkipped = (articleResult.chatsSkipped || 0) + 1;
-                // Pre-check 2: skip if rating excluded (transparent stars)
-                } else if (reviewData.ratingExcluded) {
-                  console.warn(`[TW]     Строка ${rowIdx + 1}: ЧАТЫ пропуск — прозрачные звёзды (ratingExcluded)`);
+                // Pre-check 2: skip if rating excluded (transparent stars) — only for "open"
+                // type="link" привязывает вне зависимости, чтобы бэкенд мог заблокировать общение
+                } else if (!isLinkTask && reviewData.ratingExcluded) {
+                  console.warn(`[TW]     Строка ${rowIdx + 1}: ЧАТЫ пропуск — прозрачные звёзды (ratingExcluded) type="${chatTask.type}"`);
                   report.chatsSkipped++;
                   articleResult.chatsSkipped = (articleResult.chatsSkipped || 0) + 1;
                   report.ratingExcluded = (report.ratingExcluded || 0) + 1;
-                // Pre-check 3: skip if review has blocking statuses (safety net — backend should filter these)
-                } else if (statuses.some(s => (window.SELECTORS?.REVIEW_BLOCKING?.chatStatuses || ['Жалоба одобрена', 'Снят с публикации', 'Исключён из рейтинга', 'Исключен из рейтинга', 'Дополнен']).includes(s))) {
+                // Pre-check 3: skip if review has blocking statuses — only for "open", link ignores
+                } else if (!isLinkTask && statuses.some(s => (window.SELECTORS?.REVIEW_BLOCKING?.chatStatuses || ['Жалоба одобрена', 'Снят с публикации', 'Исключён из рейтинга', 'Исключен из рейтинга', 'Дополнен']).includes(s))) {
                   const twChatBlocking = window.SELECTORS?.REVIEW_BLOCKING?.chatStatuses || ['Жалоба одобрена', 'Снят с публикации', 'Исключён из рейтинга', 'Исключен из рейтинга', 'Дополнен'];
                   const blockingFound = statuses.filter(s => twChatBlocking.includes(s));
                   console.warn(`[TW]     Строка ${rowIdx + 1}: ЧАТЫ пропуск — блокирующий статус: [${blockingFound.join(', ')}]`);
@@ -859,6 +883,36 @@ class OptimizedHandler {
                   });
                   console.log(`[TW]     Строка ${rowIdx + 1}: ЧАТЫ → добавлен в pipeline (${pageChatCaptures.length} в очереди)`);
                 }
+              }
+
+              // --- PHASE 2.5: RETROACTIVE CHAT LINKING ---
+              // Если отзыв имеет chat_opened но НЕТ задачи от бэкенда →
+              // нажать кнопку, открыть вкладку, получить URL, привязать через API
+              if (
+                reviewData.chatStatus === 'chat_opened' &&
+                !chatOpensMap.has(normalizedKey) &&
+                !processedChatKeys.has(normalizedKey) &&
+                !chatCircuitBroken &&
+                !window.stopProcessing &&
+                !report.cancelled
+              ) {
+                // Чат УЖЕ открыт → привязываем вне зависимости от ratingExcluded,
+                // чтобы бэкенд мог заблокировать общение по исключённому отзыву
+                processedChatKeys.add(normalizedKey);
+                report.retroactiveLinksDetected++;
+
+                pageChatCaptures.push({
+                  row,
+                  reviewData: {
+                    productId,
+                    rating: reviewData.rating,
+                    reviewDate: reviewData.reviewDate,
+                    reviewKey: reviewData.key
+                  },
+                  normalizedKey,
+                  isRetroactiveLink: true
+                });
+                console.log(`[TW]     Строка ${rowIdx + 1}: РЕТРО-ПРИВЯЗКА → chat_opened без задачи бэкенда, добавлен в pipeline key=${normalizedKey}${reviewData.ratingExcluded ? ' (ratingExcluded, привязка для блокировки)' : ''}`);
               }
 
               // --- PHASE 3: COMPLAINTS ---
@@ -929,99 +983,117 @@ class OptimizedHandler {
               }
             } // end row loop
 
-            // === PIPELINE: CLICK + CAPTURE ALL CHATS, THEN PROCESS IN PARALLEL ===
+            // === PIPELINE: CLICK + CAPTURE CHATS IN BATCHES, PROCESS IN PARALLEL ===
             if (pageChatCaptures.length > 0 && !window.stopProcessing && !report.cancelled && !chatCircuitBroken) {
-              console.log(`%c[TW]   Pipeline: ${pageChatCaptures.length} чатов к открытию`, 'color:#2563eb;font-weight:bold');
+              const maxConcurrent = window.SELECTORS?.CHAT_PARALLEL?.maxConcurrent || 5;
+              const totalBatches = Math.ceil(pageChatCaptures.length / maxConcurrent);
+              console.log(`%c[TW]   Pipeline: ${pageChatCaptures.length} чатов к открытию (batch по ${maxConcurrent}, всего ${totalBatches} batch)`, 'color:#2563eb;font-weight:bold');
 
               const chatService = new window.ChatService(context);
               const clickIntervalMs = window.SELECTORS?.CHAT_PARALLEL?.clickIntervalMs || 3000;
-              const captured = [];
 
-              // Phase A: Sequential clicks with URL capture (each waits for window.open)
-              for (let i = 0; i < pageChatCaptures.length; i++) {
+              for (let batchIdx = 0; batchIdx < totalBatches; batchIdx++) {
                 if (window.stopProcessing || report.cancelled || chatCircuitBroken) break;
 
-                const task = pageChatCaptures[i];
-                console.log(`[TW]   Pipeline click ${i + 1}/${pageChatCaptures.length}: key=${task.normalizedKey}`);
+                const batchStart = batchIdx * maxConcurrent;
+                const batchTasks = pageChatCaptures.slice(batchStart, batchStart + maxConcurrent);
+                console.log(`%c[TW]   Batch ${batchIdx + 1}/${totalBatches}: ${batchTasks.length} чатов`, 'color:#2563eb');
 
-                try {
-                  const captureResult = await chatService.clickAndCapture(task.row, task.reviewData);
-                  if (captureResult?.success) {
-                    captured.push({ ...captureResult, normalizedKey: task.normalizedKey });
-                    console.log(`[TW]   Pipeline click ${i + 1}: ✓ URL captured, tabId=${captureResult.tabId}`);
-                  } else {
+                const captured = [];
+
+                // Phase A: Sequential clicks with URL capture
+                for (let i = 0; i < batchTasks.length; i++) {
+                  if (window.stopProcessing || report.cancelled || chatCircuitBroken) break;
+
+                  const globalIdx = batchStart + i + 1;
+                  const task = batchTasks[i];
+                  console.log(`[TW]   Pipeline click ${globalIdx}/${pageChatCaptures.length}: key=${task.normalizedKey}`);
+
+                  try {
+                    const captureResult = await chatService.clickAndCapture(task.row, task.reviewData);
+                    if (captureResult?.success) {
+                      captured.push({ ...captureResult, normalizedKey: task.normalizedKey, isRetroactiveLink: task.isRetroactiveLink || false });
+                      console.log(`[TW]   Pipeline click ${globalIdx}: ✓ URL captured, tabId=${captureResult.tabId}`);
+                    } else {
+                      report.chatErrors++;
+                      articleResult.chatErrors = (articleResult.chatErrors || 0) + 1;
+                      consecutiveChatFailures++;
+                      console.warn(`[TW]   Pipeline click ${globalIdx}: ✗ ${captureResult?.error || 'unknown'} (failures: ${consecutiveChatFailures}/${MAX_CONSECUTIVE_CHAT_FAILURES})`);
+
+                      if (consecutiveChatFailures >= MAX_CONSECUTIVE_CHAT_FAILURES) {
+                        chatCircuitBroken = true;
+                        console.error(`%c[TW]   CIRCUIT BREAKER: ${consecutiveChatFailures} провалов подряд при клике — остановка`, 'color:#dc2626;font-weight:bold');
+                        break;
+                      }
+                    }
+                  } catch (err) {
                     report.chatErrors++;
                     articleResult.chatErrors = (articleResult.chatErrors || 0) + 1;
                     consecutiveChatFailures++;
-                    console.warn(`[TW]   Pipeline click ${i + 1}: ✗ ${captureResult?.error || 'unknown'} (failures: ${consecutiveChatFailures}/${MAX_CONSECUTIVE_CHAT_FAILURES})`);
+                    console.error(`[TW]   Pipeline click ${globalIdx}: exception:`, err.message);
 
                     if (consecutiveChatFailures >= MAX_CONSECUTIVE_CHAT_FAILURES) {
                       chatCircuitBroken = true;
-                      console.error(`%c[TW]   CIRCUIT BREAKER: ${consecutiveChatFailures} провалов подряд при клике — остановка`, 'color:#dc2626;font-weight:bold');
                       break;
                     }
                   }
-                } catch (err) {
-                  report.chatErrors++;
-                  articleResult.chatErrors = (articleResult.chatErrors || 0) + 1;
-                  consecutiveChatFailures++;
-                  console.error(`[TW]   Pipeline click ${i + 1}: exception:`, err.message);
 
-                  if (consecutiveChatFailures >= MAX_CONSECUTIVE_CHAT_FAILURES) {
-                    chatCircuitBroken = true;
-                    break;
+                  // Cooldown between clicks
+                  if (i < batchTasks.length - 1 && !window.stopProcessing && !report.cancelled && !chatCircuitBroken) {
+                    console.log(`[TW]   Pipeline: пауза ${clickIntervalMs / 1000}с перед следующим кликом...`);
+                    await window.WBUtils.sleep(clickIntervalMs);
                   }
                 }
 
-                // Cooldown between clicks (shorter than full sequential cooldown)
-                if (i < pageChatCaptures.length - 1 && !window.stopProcessing && !report.cancelled && !chatCircuitBroken) {
-                  console.log(`[TW]   Pipeline: пауза ${clickIntervalMs / 1000}с перед следующим кликом...`);
-                  await window.WBUtils.sleep(clickIntervalMs);
-                }
-              }
+                // Phase B: Process batch in PARALLEL (все вкладки batch закрываются background-ом)
+                if (captured.length > 0) {
+                  console.log(`%c[TW]   Batch ${batchIdx + 1} process: ${captured.length} чатов → параллельная обработка`, 'color:#2563eb;font-weight:bold');
+                  const startProcess = Date.now();
 
-              // Phase B: Process all captured chats in PARALLEL
-              if (captured.length > 0) {
-                console.log(`%c[TW]   Pipeline process: ${captured.length} чатов → параллельная обработка в background`, 'color:#2563eb;font-weight:bold');
-                const startProcess = Date.now();
+                  const processingPromises = captured.map(cc => chatService.processCaptured(cc));
+                  const results = await Promise.allSettled(processingPromises);
 
-                const processingPromises = captured.map(cc => chatService.processCaptured(cc));
-                const results = await Promise.allSettled(processingPromises);
+                  const processTimeMs = Date.now() - startProcess;
+                  let batchSuccess = 0;
+                  let batchFailed = 0;
 
-                const processTimeMs = Date.now() - startProcess;
-                let batchSuccess = 0;
-                let batchFailed = 0;
+                  for (let r = 0; r < results.length; r++) {
+                    const result = results[r];
+                    const key = captured[r].normalizedKey;
+                    const isRetro = captured[r].isRetroactiveLink;
 
-                for (let r = 0; r < results.length; r++) {
-                  const result = results[r];
-                  const key = captured[r].normalizedKey;
-
-                  if (result.status === 'fulfilled' && result.value?.success) {
-                    report.chatsOpened++;
-                    articleResult.chatsOpened = (articleResult.chatsOpened || 0) + 1;
-                    consecutiveChatFailures = 0;
-                    batchSuccess++;
-                    console.log(`[TW]   Pipeline result ${r + 1}: ✓ ${key}`);
-                  } else {
-                    report.chatErrors++;
-                    articleResult.chatErrors = (articleResult.chatErrors || 0) + 1;
-                    batchFailed++;
-                    const err = result.status === 'rejected' ? result.reason?.message : result.value?.error;
-                    console.warn(`[TW]   Pipeline result ${r + 1}: ✗ ${key} — ${err || 'unknown'}`);
+                    if (result.status === 'fulfilled' && result.value?.success) {
+                      if (isRetro) {
+                        report.retroactiveLinksOpened++;
+                        console.log(`[TW]   Batch ${batchIdx + 1} result ${r + 1}: ✓ РЕТРО-ПРИВЯЗКА ${key}`);
+                      } else {
+                        report.chatsOpened++;
+                        console.log(`[TW]   Batch ${batchIdx + 1} result ${r + 1}: ✓ ${key}`);
+                      }
+                      articleResult.chatsOpened = (articleResult.chatsOpened || 0) + 1;
+                      consecutiveChatFailures = 0;
+                      batchSuccess++;
+                    } else {
+                      report.chatErrors++;
+                      articleResult.chatErrors = (articleResult.chatErrors || 0) + 1;
+                      batchFailed++;
+                      const err = result.status === 'rejected' ? result.reason?.message : result.value?.error;
+                      console.warn(`[TW]   Batch ${batchIdx + 1} result ${r + 1}: ✗ ${isRetro ? 'РЕТРО ' : ''}${key} — ${err || 'unknown'}`);
+                    }
                   }
-                }
 
-                // Circuit breaker for batch: if all failed, break
-                if (batchFailed > 0 && batchSuccess === 0) {
-                  consecutiveChatFailures += batchFailed;
-                  if (consecutiveChatFailures >= MAX_CONSECUTIVE_CHAT_FAILURES) {
-                    chatCircuitBroken = true;
-                    console.error(`%c[TW]   CIRCUIT BREAKER: весь batch провалился (${batchFailed} ошибок) — чаты остановлены`, 'color:#dc2626;font-weight:bold');
+                  // Circuit breaker: if entire batch failed
+                  if (batchFailed > 0 && batchSuccess === 0) {
+                    consecutiveChatFailures += batchFailed;
+                    if (consecutiveChatFailures >= MAX_CONSECUTIVE_CHAT_FAILURES) {
+                      chatCircuitBroken = true;
+                      console.error(`%c[TW]   CIRCUIT BREAKER: batch ${batchIdx + 1} полностью провалился (${batchFailed} ошибок) — чаты остановлены`, 'color:#dc2626;font-weight:bold');
+                    }
                   }
-                }
 
-                console.log(`[TW]   Pipeline итог: ${batchSuccess} ✓ / ${batchFailed} ✗, время обработки: ${(processTimeMs / 1000).toFixed(1)}с`);
-              }
+                  console.log(`[TW]   Batch ${batchIdx + 1} итог: ${batchSuccess} ✓ / ${batchFailed} ✗, время: ${(processTimeMs / 1000).toFixed(1)}с`);
+                }
+              } // end batch loop
             } else if (pageChatCaptures.length > 0) {
               console.warn(`[TW]   Pipeline: ${pageChatCaptures.length} чатов пропущено (stopProcessing=${window.stopProcessing}, cancelled=${report.cancelled}, circuitBroken=${chatCircuitBroken})`);
             }
@@ -1047,7 +1119,7 @@ class OptimizedHandler {
               pageNumber++;
 
               // Ждём загрузки новой страницы
-              const pageReady = await this._waitForTableReady(10000, { requireChatButtons: hasChatTasks });
+              const pageReady = await this._waitForTableReady(10000, { requireChatButtons: true, chatButtonRetryAttempts: hasChatTasks ? 5 : 1 });
               if (!pageReady) {
                 console.warn(`[TW]   Стр.${pageNumber}: таблица не загрузилась, завершение`);
                 break;
@@ -1092,12 +1164,13 @@ class OptimizedHandler {
         const parts = [];
         if (report.totalReviewsSynced > 0) parts.push(`synced ${report.totalReviewsSynced}`);
         if (report.chatsOpened > 0) parts.push(`chats ${report.chatsOpened}`);
+        if (report.retroactiveLinksOpened > 0) parts.push(`retroLinks ${report.retroactiveLinksOpened}`);
         if (report.complaintsSubmitted > 0) parts.push(`complaints ${report.complaintsSubmitted}`);
         report.overallStatus = parts.length > 0 ? `SUCCESS - ${parts.join(', ')}` : 'NO_AVAILABLE';
       }
 
       console.log(`%c[TW] === ЗАВЕРШЕНО: ${report.overallStatus} ===`, 'color:#8b5cf6;font-weight:bold');
-      console.log(`[TW] Итого: Синхронизировано=${report.totalReviewsSynced} | Чаты=${report.chatsOpened} ок / ${report.chatsSkipped} пропущено / ${report.chatErrors} ошибок | Жалобы=${report.complaintsSubmitted} ок / ${report.complaintsSkipped} пропущено / ${report.complaintsErrors} ошибок`);
+      console.log(`[TW] Итого: Синхронизировано=${report.totalReviewsSynced} | Чаты=${report.chatsOpened} ок / ${report.chatsSkipped} пропущено / ${report.chatErrors} ошибок | Ретро-привязки=${report.retroactiveLinksOpened}/${report.retroactiveLinksDetected} | Жалобы=${report.complaintsSubmitted} ок / ${report.complaintsSkipped} пропущено / ${report.complaintsErrors} ошибок`);
       return report;
     }
 

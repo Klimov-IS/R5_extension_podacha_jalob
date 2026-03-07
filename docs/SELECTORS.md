@@ -126,10 +126,17 @@ const RATING_SELECTORS = {
 ```javascript
 const DATETIME_SELECTORS = {
   textSpan: 'span[data-name="Text"]',
-  pattern: /\d{2}\.\d{2}\.\d{4}\s+в\s+\d{2}:\d{2}/,
+  // Числовой формат (текущий): "DD.MM.YYYY в HH:MM"
+  patternNumeric: /\d{2}\.\d{2}\.\d{4}\s+в\s+\d{2}:\d{2}/,
+  // Текстовый формат (старый): "D месяц YYYY г. в HH:MM"
+  patternText: /\d{1,2}\s+(?:янв|фев|мар|апр|мая|май|июн|июл|авг|сен|окт|ноя|дек)\S*\s+\d{4}\s*г\.\s*в\s*\d{2}:\d{2}/,
   containerFallback: '[class*="Col-date-time-with-readmark__"]'
 };
 ```
+
+**Timezone:** WB shows time in user's local browser timezone. Conversion to UTC via `new Date()` + `.toISOString()`.
+
+**Both formats may coexist on the same page.**
 
 **Code location:** `data-extractor.js:getReviewDate()`
 

@@ -204,14 +204,41 @@ export class ChatHandler {
       console.log(`${tag} 4/7 Ожидание рендеринга контента (6с)...`);
       await this._sleep(6000);
 
-      // ВАЖНО: перезапрашиваем tab — при _findChatTab он мог быть в loading с пустым URL
-      let chatUrl = chatTab.url;
-      try {
-        const freshTab = await chrome.tabs.get(chatTab.id);
-        chatUrl = freshTab.url || chatTab.url;
-        console.log(`${tag} Tab URL refreshed: ${chatUrl?.substring(0, 100)}`);
-      } catch (e) {
-        console.warn(`${tag} Tab refresh failed (tab closed?):`, e.message);
+      // Ожидаем URL с chatId (WB может делать client-side redirect)
+      // Без chatId в URL бэкенд не сможет корректно привязать чат к отзыву
+      let chatUrl = null;
+      const CHAT_ID_MAX_WAIT = 15000;
+      const chatIdStart = Date.now();
+      let chatIdAttempt = 0;
+
+      while (Date.now() - chatIdStart < CHAT_ID_MAX_WAIT) {
+        chatIdAttempt++;
+        try {
+          const freshTab = await chrome.tabs.get(chatTab.id);
+          if (freshTab.url && freshTab.url.includes('chatId=')) {
+            chatUrl = freshTab.url;
+            console.log(`${tag} 4b/7 chatId найден в URL (попытка ${chatIdAttempt}): ${chatUrl.substring(0, 100)}`);
+            break;
+          }
+          if (chatIdAttempt <= 3) {
+            console.log(`${tag} 4b/7 URL без chatId (попытка ${chatIdAttempt}): ${freshTab.url?.substring(0, 80) || 'empty'}`);
+          }
+        } catch (e) {
+          console.warn(`${tag} 4b/7 Tab refresh failed (tab closed?): ${e.message}`);
+          break;
+        }
+        await this._sleep(1000);
+      }
+
+      if (!chatUrl) {
+        // Fallback: берём что есть, логируем предупреждение
+        try {
+          const lastTab = await chrome.tabs.get(chatTab.id);
+          chatUrl = lastTab.url || chatTab.url;
+        } catch (e) {
+          chatUrl = chatTab.url;
+        }
+        console.warn(`${tag} ⚠ URL без chatId после ${CHAT_ID_MAX_WAIT / 1000}с (${chatIdAttempt} попыток): ${chatUrl?.substring(0, 100)}`);
       }
 
       // 4. POST /chat/opened → получаем chatRecordId
@@ -233,6 +260,11 @@ export class ChatHandler {
         console.log(`${tag} chatOpened payload:`, JSON.stringify(payload).substring(0, 300));
         const openedResult = await chatAPI.chatOpened(payload);
         chatRecordId = openedResult?.data?.chatRecordId || openedResult?.chatRecordId;
+        const reviewResolved = openedResult?.data?.reviewResolved ?? openedResult?.reviewResolved;
+        const resolvedReason = openedResult?.data?.resolvedReason ?? openedResult?.resolvedReason;
+        if (reviewResolved) {
+          console.warn(`${tag} ⚠ reviewResolved=true (${resolvedReason}) — бэкенд авто-закроет чат`);
+        }
         console.log(`${tag} ✓ chatOpened OK → chatRecordId=${chatRecordId}`, openedResult);
       } catch (err) {
         console.error(`${tag} ✗ chatOpened API ERROR:`, err.message);
