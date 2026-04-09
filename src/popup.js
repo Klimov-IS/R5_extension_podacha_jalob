@@ -1,26 +1,26 @@
 /**
- * Popup script - Diagnostic entry point
- * Opens the diagnostic page for complaint submission workflow
+ * Popup script - Dashboard entry point
+ * Opens the dashboard page for task management
  *
- * @version 3.0.0 - Single button (diagnostic only)
+ * @version 4.0.0 - Dashboard (Variant C sidebar layout)
  */
 
 document.addEventListener("DOMContentLoaded", async () => {
   const btnDiagnostic = document.getElementById("btn-diagnostic");
 
-  // === Open diagnostic page ===
+  // === Open dashboard page ===
   btnDiagnostic.addEventListener("click", async () => {
     try {
-      // Check if diagnostic page is already open
+      // Check if dashboard is already open
       const allTabs = await chrome.tabs.query({});
-      const existingDiagnosticTab = allTabs.find(tab =>
-        tab.url && tab.url.includes(chrome.runtime.getURL("diagnostic.html"))
+      const existingTab = allTabs.find(tab =>
+        tab.url && tab.url.includes(chrome.runtime.getURL("dashboard.html"))
       );
 
-      if (existingDiagnosticTab) {
+      if (existingTab) {
         // Focus on existing tab
-        await chrome.tabs.update(existingDiagnosticTab.id, { active: true });
-        await chrome.windows.update(existingDiagnosticTab.windowId, { focused: true });
+        await chrome.tabs.update(existingTab.id, { active: true });
+        await chrome.windows.update(existingTab.windowId, { focused: true });
         return;
       }
 
@@ -30,15 +30,15 @@ document.addEventListener("DOMContentLoaded", async () => {
         currentWindow: true,
       });
 
-      // Open diagnostic page in new tab
+      // Open dashboard in new tab
       await chrome.tabs.create({
-        url: chrome.runtime.getURL("diagnostic.html"),
+        url: chrome.runtime.getURL("dashboard.html"),
         index: currentTab.index + 1,
         active: true,
       });
 
     } catch (error) {
-      console.error("[Popup] Error opening diagnostic page:", error);
+      console.error("[Popup] Error opening dashboard:", error);
       alert("Error: " + error.message);
     }
   });
