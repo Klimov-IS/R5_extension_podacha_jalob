@@ -389,17 +389,17 @@ function renderUpsell(store) {
   const upsellEl = document.getElementById('chat-upsell');
   if (!upsellEl) return;
 
-  const potNeg = store.potentialChatsNeg || 0;
-  const pot4 = store.potentialChats4 || 0;
-  const potTotal = potNeg + pot4;
-
-  // Only show if chats not active AND potential chats exist
-  if (store.chatFeatureActive !== false || potTotal === 0) {
+  // Show when chats not active (regardless of potential counts)
+  if (store.chatFeatureActive !== false) {
     upsellEl.classList.remove('active');
     return;
   }
 
-  // Build copyable message
+  const potNeg = store.potentialChatsNeg || 0;
+  const pot4 = store.potentialChats4 || 0;
+  const potTotal = potNeg + pot4;
+
+  // Build copyable message — with or without specific counts
   const msgLines = [];
   const htmlLines = [];
   if (potNeg > 0) {
@@ -412,7 +412,18 @@ function renderUpsell(store) {
   }
 
   const storeName = escapeHtml(store.name);
-  const copyText = `Добрый день!\n\nПо магазину "${store.name}" сейчас есть отзывы, которые можно отработать через чаты:\n\n${msgLines.join('\n')}\n\nЧаты помогают повысить лояльность покупателей, снизить процент возвратов и получить ценную обратную связь для улучшения карточек.\n\nДля запуска необходимо активировать функцию "Чаты с покупателями отзывов" в личном кабинете WB: Отзывы и вопросы → Настройки. После активации мы сможем приступить к работе.`;
+
+  // Message body: detailed (with counts) or generic (without)
+  let msgBody, htmlBody;
+  if (potTotal > 0) {
+    msgBody = `По магазину "${store.name}" сейчас есть отзывы, которые можно отработать через чаты:\n\n${msgLines.join('\n')}\n\nЧаты помогают повысить лояльность покупателей, снизить процент возвратов и получить ценную обратную связь для улучшения карточек.`;
+    htmlBody = `По магазину <b>"${storeName}"</b> сейчас есть отзывы, которые можно отработать через чаты:<br><br>${htmlLines.join('<br>')}<br><br>Чаты помогают повысить лояльность покупателей, снизить процент возвратов и получить ценную обратную связь для улучшения карточек.`;
+  } else {
+    msgBody = `По магазину "${store.name}" функция "Чаты с покупателями отзывов" не подключена.\n\nЧаты помогают повысить лояльность покупателей, снизить процент возвратов и получить ценную обратную связь для улучшения карточек.`;
+    htmlBody = `По магазину <b>"${storeName}"</b> функция "Чаты с покупателями отзывов" не подключена.<br><br>Чаты помогают повысить лояльность покупателей, снизить процент возвратов и получить ценную обратную связь для улучшения карточек.`;
+  }
+
+  const copyText = `Добрый день!\n\n${msgBody}\n\nДля запуска необходимо активировать функцию "Чаты с покупателями отзывов" в личном кабинете WB: Отзывы и вопросы → Настройки. После активации мы сможем приступить к работе.`;
 
   upsellEl.innerHTML = `
     <button class="chat-upsell-dismiss" id="upsell-dismiss" title="Скрыть">&times;</button>
@@ -423,7 +434,7 @@ function renderUpsell(store) {
         <div class="chat-upsell-subtitle">Готовое сообщение для клиента</div>
       </div>
     </div>
-    <div class="chat-upsell-message">Добрый день!<br><br>По магазину <b>"${storeName}"</b> сейчас есть отзывы, которые можно отработать через чаты:<br><br>${htmlLines.join('<br>')}<br><br>Чаты помогают повысить лояльность покупателей, снизить процент возвратов и получить ценную обратную связь для улучшения карточек.<br><br>Для запуска необходимо активировать функцию <b>"Чаты с покупателями отзывов"</b> в личном кабинете WB: Отзывы и вопросы &rarr; Настройки. После активации мы сможем приступить к работе.</div>
+    <div class="chat-upsell-message">Добрый день!<br><br>${htmlBody}<br><br>Для запуска необходимо активировать функцию <b>"Чаты с покупателями отзывов"</b> в личном кабинете WB: Отзывы и вопросы &rarr; Настройки. После активации мы сможем приступить к работе.</div>
     <button class="chat-upsell-copy" id="upsell-copy-btn">Скопировать сообщение</button>
   `;
   upsellEl.classList.add('active', 'fade-in');
