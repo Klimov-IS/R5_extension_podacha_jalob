@@ -485,7 +485,10 @@
         </button>
         <button id="btn-get-complaints" class="btn btn-secondary" style="align-self: flex-end;" disabled>
           📥 Получить задачи
-
+        </button>
+        <button id="btn-reparse" class="btn btn-secondary" style="align-self: flex-end;" disabled>
+          🔄 Перепарсить
+        </button>
       </div>
 
       <div id="complaints-info" class="complaints-info hidden">
@@ -494,11 +497,6 @@
       </div>
 
       <div id="task-type-selector" class="task-type-selector">
-        <label class="task-type-label">
-          <input type="checkbox" id="chk-status-parses" checked>
-          <span class="task-type-name">🔍 Парсинг статусов</span>
-          <span class="task-type-count" id="count-status-parses">0</span>
-        </label>
         <label class="task-type-label">
           <input type="checkbox" id="chk-chat-opens" checked>
           <span class="task-type-name">💬 Открытие чатов</span>

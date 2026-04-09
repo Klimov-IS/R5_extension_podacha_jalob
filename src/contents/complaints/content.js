@@ -228,14 +228,10 @@ function injectMainWorldBundle() {
     // ========================================================================
 
     window.addEventListener('wb-sync-request', async (event) => {
-      const { requestId, type, storeId, reviews, notFoundReviewKeys } = event.detail;
+      const { requestId, type, storeId, reviews } = event.detail;
 
       try {
-        const msg = { type, storeId, reviews };
-        if (notFoundReviewKeys && notFoundReviewKeys.length > 0) {
-          msg.notFoundReviewKeys = notFoundReviewKeys;
-        }
-        const response = await chrome.runtime.sendMessage(msg);
+        const response = await chrome.runtime.sendMessage({ type, storeId, reviews });
 
         // Отправляем ответ обратно в MAIN world
         window.dispatchEvent(new CustomEvent('wb-sync-response', {

@@ -70,6 +70,11 @@ class MessageRouter {
           sendResponse(tasks);
           break;
 
+        case 'reparseStore':
+          const reparseResult = await this.handlers.complaints.reparseStore(message);
+          sendResponse(reparseResult);
+          break;
+
         // === REVIEWS HANDLER ===
         case 'sendReviewsToAPI':
           const reviewsResult = await this.handlers.reviews.sendReviews(message);

@@ -22,9 +22,6 @@ function extractTaskKeys(tasks) {
   const keys = new Set();
   const articles = tasks.articles || {};
   for (const [articleId, articleTasks] of Object.entries(articles)) {
-    for (const sp of (articleTasks.statusParses || [])) {
-      keys.add(`sp:${sp.reviewKey}`);
-    }
     for (const ch of (articleTasks.chatOpens || [])) {
       keys.add(`ch:${ch.reviewKey}`);
     }
@@ -61,12 +58,11 @@ const previewCard = document.getElementById('preview-card');
 const previewAccordion = document.getElementById('preview-accordion');
 const btnRefreshStores = document.getElementById('btn-refresh-stores');
 const taskTypeSelector = document.getElementById('task-type-selector');
-const chkStatusParses = document.getElementById('chk-status-parses');
 const chkChatOpens = document.getElementById('chk-chat-opens');
 const chkComplaints = document.getElementById('chk-complaints');
-const countStatusParses = document.getElementById('count-status-parses');
 const countChatOpens = document.getElementById('count-chat-opens');
 const countComplaints = document.getElementById('count-complaints');
+const btnReparse = document.getElementById('btn-reparse');
 
 // Состояние
 let loadedTasks = null; // { storeId, articles, totals, limits }
@@ -113,11 +109,9 @@ async function loadStores(forceRefresh = false) {
       // Форматируем счётчики задач (API v1.3.0)
       const complaints = store.draftComplaintsCount || 0;
       const chats = store.pendingChatsCount || 0;
-      const statusParses = store.pendingStatusParsesCount || 0;
       const parts = [];
       if (complaints > 0) parts.push(`${complaints} жалоб`);
       if (chats > 0) parts.push(`${chats} чатов`);
-      if (statusParses > 0) parts.push(`${statusParses} статусов`);
       const countText = parts.length > 0 ? ` — ${parts.join(', ')}` : '';
       option.textContent = store.name + countText;
 
@@ -157,6 +151,7 @@ btnRefreshStores.addEventListener('click', async () => {
 storeSelect.addEventListener('change', () => {
   const hasSelection = storeSelect.value !== '';
   btnGetTasks.disabled = !hasSelection;
+  btnReparse.disabled = !hasSelection;
 
   // Сбрасываем состояние при смене магазина
   if (hasSelection) {
@@ -175,7 +170,6 @@ storeSelect.addEventListener('change', () => {
 
 function getEnabledTaskTypes() {
   const types = [];
-  if (chkStatusParses.checked) types.push('statusParses');
   if (chkChatOpens.checked) types.push('chatOpens');
   if (chkComplaints.checked) types.push('complaints');
   return types;
@@ -185,14 +179,13 @@ function updateSelectedCount() {
   if (!loadedTasks) return;
   const tc = loadedTasks.totalCounts || loadedTasks.totals || {};
   let total = 0;
-  if (chkStatusParses.checked) total += tc.statusParses || 0;
   if (chkChatOpens.checked) total += tc.chatOpens || 0;
   if (chkComplaints.checked) total += tc.complaints || 0;
   complaintsCountEl.textContent = total;
   btnSubmit.disabled = total === 0;
 }
 
-[chkStatusParses, chkChatOpens, chkComplaints].forEach(chk => {
+[chkChatOpens, chkComplaints].forEach(chk => {
   chk.addEventListener('change', updateSelectedCount);
 });
 
@@ -236,7 +229,7 @@ async function getTasks() {
     const totals = loadedTasks.totals || {};
     // totalCounts = реальный пул задач (без LIMIT), fallback на totals (батч)
     const tc = loadedTasks.totalCounts || totals;
-    const totalCount = (tc.statusParses || 0) + (tc.chatOpens || 0) + (tc.complaints || 0);
+    const totalCount = (tc.chatOpens || 0) + (tc.complaints || 0);
 
     if (totalCount === 0) {
       throw new Error('Нет задач для обработки. Все задачи уже выполнены.');
@@ -248,13 +241,10 @@ async function getTasks() {
     btnSubmit.disabled = false;
 
     // Показываем чекбоксы типов задач (реальный пул)
-    countStatusParses.textContent = tc.statusParses || 0;
     countChatOpens.textContent = tc.chatOpens || 0;
     countComplaints.textContent = tc.complaints || 0;
 
     // Disable + uncheck types with 0 tasks
-    chkStatusParses.disabled = !(tc.statusParses > 0);
-    chkStatusParses.checked = tc.statusParses > 0;
     chkChatOpens.disabled = !(tc.chatOpens > 0);
     chkChatOpens.checked = tc.chatOpens > 0;
     chkComplaints.disabled = !(tc.complaints > 0);
@@ -272,6 +262,68 @@ async function getTasks() {
     storeSelect.disabled = false;
     btnGetTasks.disabled = false;
     btnGetTasks.textContent = '📥 Получить задачи';
+  }
+}
+
+// ========================================================================
+// ПЕРЕПАРСИТЬ КАБИНЕТ
+// ========================================================================
+
+btnReparse.addEventListener('click', reparseStore);
+
+async function reparseStore() {
+  const storeId = storeSelect.value;
+  if (!storeId) { showError('Выберите магазин!'); return; }
+
+  const storeName = storeSelect.options[storeSelect.selectedIndex].textContent;
+  if (!confirm(`Перепарсить кабинет?\n\n${storeName}\n\nВсе статусы отзывов будут сброшены и отправлены на повторный парсинг.\n\nПродолжить?`)) return;
+
+  // Блокируем UI
+  storeSelect.disabled = true;
+  btnGetTasks.disabled = true;
+  btnReparse.disabled = true;
+  btnReparse.textContent = '⏳ Сброс...';
+  btnSubmit.disabled = true;
+  hideError();
+  complaintsInfo.classList.add('hidden');
+  taskTypeSelector.classList.remove('active');
+  hidePreview();
+
+  try {
+    // 1. Вызов API перепарсинга
+    const response = await chrome.runtime.sendMessage({ type: 'reparseStore', storeId });
+
+    if (!response || response.error) {
+      if (response?.error?.startsWith('TOO_MANY_REVIEWS:')) {
+        throw new Error('Слишком много отзывов (>2000). Обратитесь к менеджеру или используйте фильтр по артикулам.');
+      }
+      throw new Error(response?.error || 'Не удалось перепарсить кабинет');
+    }
+
+    const result = response.data?.data || response.data;
+    const resetCount = result.reset || 0;
+    const skippedCount = result.skipped || 0;
+    console.log(`[Diagnostic] Reparse: reset=${resetCount}, skipped=${skippedCount}`);
+
+    // 2. Показываем результат кратко
+    btnReparse.textContent = `✅ ${resetCount} в очереди`;
+    await new Promise(r => setTimeout(r, 1500));
+
+    // 3. Автоматически загружаем задачи
+    btnReparse.textContent = '🔄 Перепарсить';
+    btnReparse.disabled = true;
+    currentStoreId = storeId;
+    await chrome.storage.local.set({ currentStoreId: storeId });
+    await getTasks();
+
+  } catch (error) {
+    console.error('[Diagnostic] Reparse error:', error);
+    showError(error.message);
+  } finally {
+    storeSelect.disabled = false;
+    btnGetTasks.disabled = false;
+    btnReparse.disabled = !storeSelect.value;
+    btnReparse.textContent = '🔄 Перепарсить';
   }
 }
 
@@ -295,7 +347,6 @@ async function submitTasks() {
   const storeName = storeSelect.options[storeSelect.selectedIndex].textContent;
 
   const typeLines = [];
-  if (enabledTypes.includes('statusParses')) typeLines.push(`  • Парсинг статусов: ${tc.statusParses || 0} (батч: ${totals.statusParses || 0})`);
   if (enabledTypes.includes('chatOpens')) typeLines.push(`  • Открытие чатов: ${tc.chatOpens || 0} (батч: ${totals.chatOpens || 0})`);
   if (enabledTypes.includes('complaints')) typeLines.push(`  • Подача жалоб: ${tc.complaints || 0} (батч: ${totals.complaints || 0})`);
 
@@ -371,7 +422,7 @@ async function submitTasks() {
 
       const tasks = apiResponse.data;
       const roundTotals = tasks.totals || {};
-      const roundTotal = (roundTotals.statusParses || 0) + (roundTotals.chatOpens || 0) + (roundTotals.complaints || 0);
+      const roundTotal = (roundTotals.chatOpens || 0) + (roundTotals.complaints || 0);
 
       // Условие выхода: 0 задач
       if (roundTotal === 0) {
@@ -390,7 +441,7 @@ async function submitTasks() {
 
       updateProgress(
         15 + (round - 1) * 2,
-        `Раунд ${round}: Обработка ${roundTotal} задач (парсинг: ${roundTotals.statusParses || 0}, чаты: ${roundTotals.chatOpens || 0}, жалобы: ${roundTotals.complaints || 0})...`
+        `Раунд ${round}: Обработка ${roundTotal} задач (чаты: ${roundTotals.chatOpens || 0}, жалобы: ${roundTotals.complaints || 0})...`
       );
 
       // 4. Отправить на обработку в WB вкладку
@@ -491,10 +542,9 @@ function showPreview(tasks) {
   let html = '';
 
   for (const [articleId, articleTasks] of Object.entries(articles)) {
-    const statusParses = articleTasks.statusParses || [];
     const chatOpens = articleTasks.chatOpens || [];
     const complaints = articleTasks.complaints || [];
-    const articleTotal = statusParses.length + chatOpens.length + complaints.length;
+    const articleTotal = chatOpens.length + complaints.length;
 
     html += `
       <div class="accordion-item">
@@ -507,23 +557,6 @@ function showPreview(tasks) {
         </div>
         <div class="accordion-content">
     `;
-
-    // Парсинг статусов
-    if (statusParses.length > 0) {
-      html += `<div class="complaint-item" style="background:#f0f9ff; padding:10px 16px;">
-        <strong style="color:#0284c7;">🔍 Парсинг статусов: ${statusParses.length}</strong>
-      </div>`;
-      statusParses.forEach(sp => {
-        html += `
-          <div class="complaint-item">
-            <div class="complaint-row">
-              <span class="complaint-rating">${'⭐'.repeat(sp.rating || 0) || '—'}</span>
-              <span class="complaint-date">${sp.reviewKey || '—'}</span>
-            </div>
-          </div>
-        `;
-      });
-    }
 
     // Чаты
     if (chatOpens.length > 0) {
@@ -574,7 +607,6 @@ function showPreview(tasks) {
   html += `
     <div style="margin-top:12px; padding:12px 16px; background:#f9fafb; border-radius:10px; font-size:13px; color:#6b7280;">
       <strong>Итого:</strong>
-      🔍 Парсинг: ${totals.statusParses || 0} •
       💬 Чаты: ${totals.chatOpens || 0} •
       📝 Жалобы: ${totals.complaints || 0}
     </div>
@@ -607,5 +639,7 @@ function resetUI() {
   btnGetTasks.textContent = '📥 Получить задачи';
   btnSubmit.disabled = !loadedTasks;
   btnSubmit.textContent = '▶️ Запустить';
+  btnReparse.disabled = !storeSelect.value;
+  btnReparse.textContent = '🔄 Перепарсить';
 }
 

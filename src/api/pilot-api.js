@@ -253,6 +253,53 @@ class PilotAPI {
   }
 
   /**
+   * Перепарсить отзывы кабинета (сброс статусов для повторного парсинга)
+   *
+   * @param {string} [storeId] - ID магазина
+   * @param {string[]} [nmIds] - Опциональный фильтр по артикулам
+   * @returns {Promise<Object>} { success, data: { reset, skipped, skippedReasons, total }, message, elapsed }
+   */
+  async reparseStore(storeId, nmIds = null) {
+    await this.initialize();
+
+    const targetStoreId = storeId || this.storeId;
+    const url = `${this.baseURL}/api/extension/stores/${targetStoreId}/reviews/reparse`;
+    const body = nmIds ? { nmIds } : {};
+
+    const response = await fetchWithRetry(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    }, {
+      maxRetries: 2,
+      baseDelay: 1000,
+      shouldRetry: (res) => res.status === 503
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => '');
+
+      if (response.status === 400) {
+        let parsed;
+        try { parsed = JSON.parse(errorText); } catch {}
+        const total = parsed?.total || '';
+        const limit = parsed?.limit || 2000;
+        throw new Error(`TOO_MANY_REVIEWS:${total ? ` ${total} отзывов.` : ''} Максимум ${limit} за один вызов.`);
+      }
+      if (response.status === 401) throw new Error('Ошибка авторизации: проверьте Backend Token');
+      if (response.status === 404) throw new Error('Магазин не найден: проверьте Store ID');
+      if (response.status === 429) throw new Error('Превышен лимит запросов');
+
+      throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
+    }
+
+    return await response.json();
+  }
+
+  /**
    * Health check - проверка работоспособности API
    * @returns {Promise<Object>} - Статус API
    */

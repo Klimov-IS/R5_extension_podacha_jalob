@@ -616,7 +616,6 @@ class OptimizedHandler {
       if (enabledTaskTypes && enabledTaskTypes.length > 0) {
         console.log(`[TW] Фильтр типов задач: [${enabledTaskTypes.join(', ')}]`);
         for (const pid of articleIds) {
-          if (!enabledTaskTypes.includes('statusParses')) articles[pid].statusParses = [];
           if (!enabledTaskTypes.includes('chatOpens')) articles[pid].chatOpens = [];
           if (!enabledTaskTypes.includes('complaints')) articles[pid].complaints = [];
         }
@@ -626,22 +625,19 @@ class OptimizedHandler {
         timestamp: new Date().toISOString(),
         mode: 'tasks',
         uniqueArticles: articleIds.length,
-        // Status parse
-        statusParsesRequested: tasks?.totals?.statusParses || 0,
         totalReviewsSynced: 0,
         // Chat
         chatOpensRequested: tasks?.totals?.chatOpens || 0,
         chatsOpened: 0,
         chatsSkipped: 0,
         chatErrors: 0,
-        // Retroactive linking (chat_opened без задачи от бэкенда)
-        retroactiveLinksDetected: 0,
-        retroactiveLinksOpened: 0,
         // Complaints
         complaintsRequested: tasks?.totals?.complaints || 0,
         complaintsSubmitted: 0,
         complaintsSkipped: 0,
         complaintsErrors: 0,
+        // Not found
+        notFoundSent: 0,
         // General
         tabSwitches: 0,
         cancelled: false,
@@ -655,7 +651,7 @@ class OptimizedHandler {
       }
 
       console.log(`%c[TW] === НАЧАЛО ОБРАБОТКИ ЗАДАЧ ===`, 'color:#8b5cf6;font-weight:bold');
-      console.log(`[TW] Артикулов: ${articleIds.length} | Парсинг: ${report.statusParsesRequested} | Чаты: ${report.chatOpensRequested} | Жалобы: ${report.complaintsRequested}`);
+      console.log(`[TW] Артикулов: ${articleIds.length} | Чаты: ${report.chatOpensRequested} | Жалобы: ${report.complaintsRequested}`);
       console.log(`[TW] Лимиты: cooldownChats=${limits.cooldownBetweenChatsMs || 3000}мс, cooldownComplaints=${limits.cooldownBetweenComplaintsMs || 1000}мс`);
 
       const processedComplaints = [];
@@ -688,12 +684,11 @@ class OptimizedHandler {
           complaintsErrors: 0
         };
 
-        const aParse = (articleData.statusParses || []).length;
         const aChat = (articleData.chatOpens || []).length;
         const aCompl = (articleData.complaints || []).length;
 
         console.log(`%c[TW] ── Артикул ${articleIndex}/${articleIds.length}: ${productId} ──`, 'color:#2563eb;font-weight:bold');
-        console.log(`[TW]   Задачи: парсинг=${aParse}, чаты=${aChat}, жалобы=${aCompl}`);
+        console.log(`[TW]   Задачи: чаты=${aChat}, жалобы=${aCompl}`);
 
         // === ПОИСК АРТИКУЛА ===
         console.log(`[TW]   Поиск артикула ${productId}...`);
@@ -705,7 +700,7 @@ class OptimizedHandler {
         }
 
         // Ждём реальной загрузки таблицы после поиска
-        // requireChatButtons: true всегда — для точного chatStatus в sync + ретроактивная привязка
+        // requireChatButtons: true всегда — для точного chatStatus в sync
         // chatButtonRetryAttempts: 1 при начальной загрузке (текущий таб может быть пустой)
         const hasChatTasks = (articleData.chatOpens || []).length > 0;
         console.log(`[TW]   Ожидание загрузки таблицы...`);
@@ -730,14 +725,16 @@ class OptimizedHandler {
           if (nk) complaintsMap.set(nk, complaint);
         }
 
-        // StatusParse tracking: ключи которые нужно найти на странице
-        const statusParseKeys = new Set();
-        for (const sp of (articleData.statusParses || [])) {
-          const nk = this.normalizeReviewKey(sp.reviewKey);
-          if (nk) statusParseKeys.add(nk);
+        // Unified map: ALL task keys → original data (for not_found detection)
+        const allTaskKeysData = new Map();
+        for (const [nk, chat] of chatOpensMap) {
+          allTaskKeysData.set(nk, { productId, rating: chat.rating, reviewDate: chat.reviewDate, reviewKey: chat.reviewKey });
+        }
+        for (const [nk, complaint] of complaintsMap) {
+          allTaskKeysData.set(nk, { productId, rating: complaint.rating, reviewDate: complaint.date || complaint.createdAt, reviewKey: complaint.reviewKey });
         }
 
-        console.log(`[TW]   Lookup Maps: chatOpens=${chatOpensMap.size} ключей, complaints=${complaintsMap.size} ключей, statusParses=${statusParseKeys.size} ключей`);
+        console.log(`[TW]   Lookup Maps: chatOpens=${chatOpensMap.size} ключей, complaints=${complaintsMap.size} ключей, allTaskKeys=${allTaskKeysData.size} (для not_found)`);
 
         // Tracking Sets — prevent re-processing across pages
         const processedChatKeys = new Set();
@@ -756,6 +753,12 @@ class OptimizedHandler {
 
         for (const targetTab of tabOrder) {
           if (window.stopProcessing || report.cancelled) break;
+
+          // Early exit: all target reviews already found — skip remaining tabs
+          if (allTaskKeysData.size === 0) {
+            console.log(`[TW]   Все целевые отзывы найдены — пропуск оставшихся вкладок`);
+            break;
+          }
 
           if (targetTab !== null) {
             console.log(`[TW]   Переключение на вкладку "${targetTab}"...`);
@@ -830,8 +833,8 @@ class OptimizedHandler {
               report.totalReviewsSynced++;
               articleResult.reviewsSynced++;
 
-              // Отмечаем найденный statusParse ключ
-              statusParseKeys.delete(normalizedKey);
+              // Отмечаем найденный ключ задачи (для not_found detection)
+              allTaskKeysData.delete(normalizedKey);
 
               // --- PHASE 2: CHAT OPENS ---
               if (chatOpensMap.has(normalizedKey) && !processedChatKeys.has(normalizedKey)) {
@@ -883,36 +886,6 @@ class OptimizedHandler {
                   });
                   console.log(`[TW]     Строка ${rowIdx + 1}: ЧАТЫ → добавлен в pipeline (${pageChatCaptures.length} в очереди)`);
                 }
-              }
-
-              // --- PHASE 2.5: RETROACTIVE CHAT LINKING ---
-              // Если отзыв имеет chat_opened но НЕТ задачи от бэкенда →
-              // нажать кнопку, открыть вкладку, получить URL, привязать через API
-              if (
-                reviewData.chatStatus === 'chat_opened' &&
-                !chatOpensMap.has(normalizedKey) &&
-                !processedChatKeys.has(normalizedKey) &&
-                !chatCircuitBroken &&
-                !window.stopProcessing &&
-                !report.cancelled
-              ) {
-                // Чат УЖЕ открыт → привязываем вне зависимости от ratingExcluded,
-                // чтобы бэкенд мог заблокировать общение по исключённому отзыву
-                processedChatKeys.add(normalizedKey);
-                report.retroactiveLinksDetected++;
-
-                pageChatCaptures.push({
-                  row,
-                  reviewData: {
-                    productId,
-                    rating: reviewData.rating,
-                    reviewDate: reviewData.reviewDate,
-                    reviewKey: reviewData.key
-                  },
-                  normalizedKey,
-                  isRetroactiveLink: true
-                });
-                console.log(`[TW]     Строка ${rowIdx + 1}: РЕТРО-ПРИВЯЗКА → chat_opened без задачи бэкенда, добавлен в pipeline key=${normalizedKey}${reviewData.ratingExcluded ? ' (ratingExcluded, привязка для блокировки)' : ''}`);
               }
 
               // --- PHASE 3: COMPLAINTS ---
@@ -1012,7 +985,7 @@ class OptimizedHandler {
                   try {
                     const captureResult = await chatService.clickAndCapture(task.row, task.reviewData);
                     if (captureResult?.success) {
-                      captured.push({ ...captureResult, normalizedKey: task.normalizedKey, isRetroactiveLink: task.isRetroactiveLink || false });
+                      captured.push({ ...captureResult, normalizedKey: task.normalizedKey });
                       console.log(`[TW]   Pipeline click ${globalIdx}: ✓ URL captured, tabId=${captureResult.tabId}`);
                     } else {
                       report.chatErrors++;
@@ -1060,16 +1033,10 @@ class OptimizedHandler {
                   for (let r = 0; r < results.length; r++) {
                     const result = results[r];
                     const key = captured[r].normalizedKey;
-                    const isRetro = captured[r].isRetroactiveLink;
 
                     if (result.status === 'fulfilled' && result.value?.success) {
-                      if (isRetro) {
-                        report.retroactiveLinksOpened++;
-                        console.log(`[TW]   Batch ${batchIdx + 1} result ${r + 1}: ✓ РЕТРО-ПРИВЯЗКА ${key}`);
-                      } else {
-                        report.chatsOpened++;
-                        console.log(`[TW]   Batch ${batchIdx + 1} result ${r + 1}: ✓ ${key}`);
-                      }
+                      report.chatsOpened++;
+                      console.log(`[TW]   Batch ${batchIdx + 1} result ${r + 1}: ✓ ${key}`);
                       articleResult.chatsOpened = (articleResult.chatsOpened || 0) + 1;
                       consecutiveChatFailures = 0;
                       batchSuccess++;
@@ -1078,7 +1045,7 @@ class OptimizedHandler {
                       articleResult.chatErrors = (articleResult.chatErrors || 0) + 1;
                       batchFailed++;
                       const err = result.status === 'rejected' ? result.reason?.message : result.value?.error;
-                      console.warn(`[TW]   Batch ${batchIdx + 1} result ${r + 1}: ✗ ${isRetro ? 'РЕТРО ' : ''}${key} — ${err || 'unknown'}`);
+                      console.warn(`[TW]   Batch ${batchIdx + 1} result ${r + 1}: ✗ ${key} — ${err || 'unknown'}`);
                     }
                   }
 
@@ -1102,10 +1069,40 @@ class OptimizedHandler {
             console.log(`[TW]   Стр.${pageNumber} итог: ${pageReviewsToSync.length} отзывов спарсено, ${pageChatMatches} чатов совпало, ${pageComplaintMatches} жалоб`);
 
             // === FIRE-AND-FORGET STATUS SYNC ===
+            // Capture oldest page date BEFORE splice (for date-based early exit)
+            let oldestPageDate = null;
+            for (const r of pageReviewsToSync) {
+              if (r.reviewDate && (!oldestPageDate || r.reviewDate < oldestPageDate)) {
+                oldestPageDate = r.reviewDate;
+              }
+            }
+
             if (pageReviewsToSync.length > 0 && storeId) {
               const syncData = pageReviewsToSync.splice(0);
               this.syncReviewStatuses(storeId, syncData).catch(() => {});
               console.log(`[TW]   Стр.${pageNumber}: sync отправлен (${syncData.length} отзывов)`);
+            }
+
+            // === EARLY EXIT: all target reviews found ===
+            if (allTaskKeysData.size === 0) {
+              console.log(`[TW]   Стр.${pageNumber}: все целевые отзывы найдены — ранний выход`);
+              break;
+            }
+
+            // === EARLY EXIT: date-based ===
+            // Reviews sorted newest→oldest. If oldest page review is older than oldest remaining
+            // target, subsequent pages will be even older — no point continuing.
+            if (allTaskKeysData.size > 0 && oldestPageDate) {
+              let oldestTargetDate = null;
+              for (const [nk, data] of allTaskKeysData) {
+                if (data.reviewDate && (!oldestTargetDate || data.reviewDate < oldestTargetDate)) {
+                  oldestTargetDate = data.reviewDate;
+                }
+              }
+              if (oldestTargetDate && oldestPageDate <= oldestTargetDate) {
+                console.log(`[TW]   Стр.${pageNumber}: ранний выход по дате — oldest page (${oldestPageDate.substring(0, 10)}) <= oldest target (${oldestTargetDate.substring(0, 10)})`);
+                break;
+              }
             }
 
             // Navigate to next page
@@ -1131,11 +1128,27 @@ class OptimizedHandler {
           } // end page loop
         } // end tab loop
 
-        // === NOT FOUND REVIEW KEYS → send to backend for targeted sync ===
-        if (statusParseKeys.size > 0 && storeId) {
-          const notFoundKeys = Array.from(statusParseKeys);
-          console.log(`[TW]   notFoundReviewKeys: ${notFoundKeys.length} ключей не найдены на странице`);
-          this.syncReviewStatuses(storeId, [], notFoundKeys).catch(() => {});
+        // === NOT FOUND: send reviewStatusWb: 'not_found' for missing reviews ===
+        // Protection: only if at least 1 review was synced (parser works, page loaded)
+        if (allTaskKeysData.size > 0 && storeId && articleResult.reviewsSynced > 0) {
+          const notFoundReviews = [];
+          for (const [nk, taskData] of allTaskKeysData) {
+            notFoundReviews.push({
+              productId: taskData.productId,
+              rating: taskData.rating,
+              reviewDate: taskData.reviewDate,
+              key: taskData.reviewKey,
+              statuses: [],
+              chatStatus: null,
+              ratingExcluded: false,
+              reviewStatusWb: 'not_found'
+            });
+          }
+          console.log(`[TW]   not_found: ${notFoundReviews.length} отзывов не найдены на странице (отправляем reviewStatusWb=not_found)`);
+          this.syncReviewStatuses(storeId, notFoundReviews).catch(() => {});
+          report.notFoundSent += notFoundReviews.length;
+        } else if (allTaskKeysData.size > 0 && articleResult.reviewsSynced === 0) {
+          console.warn(`[TW]   not_found: ${allTaskKeysData.size} ключей не найдены, НО 0 отзывов синхронизировано — НЕ отправляем (защита от false positive)`);
         }
 
         // === ARTICLE SUMMARY ===
@@ -1164,13 +1177,13 @@ class OptimizedHandler {
         const parts = [];
         if (report.totalReviewsSynced > 0) parts.push(`synced ${report.totalReviewsSynced}`);
         if (report.chatsOpened > 0) parts.push(`chats ${report.chatsOpened}`);
-        if (report.retroactiveLinksOpened > 0) parts.push(`retroLinks ${report.retroactiveLinksOpened}`);
+
         if (report.complaintsSubmitted > 0) parts.push(`complaints ${report.complaintsSubmitted}`);
         report.overallStatus = parts.length > 0 ? `SUCCESS - ${parts.join(', ')}` : 'NO_AVAILABLE';
       }
 
       console.log(`%c[TW] === ЗАВЕРШЕНО: ${report.overallStatus} ===`, 'color:#8b5cf6;font-weight:bold');
-      console.log(`[TW] Итого: Синхронизировано=${report.totalReviewsSynced} | Чаты=${report.chatsOpened} ок / ${report.chatsSkipped} пропущено / ${report.chatErrors} ошибок | Ретро-привязки=${report.retroactiveLinksOpened}/${report.retroactiveLinksDetected} | Жалобы=${report.complaintsSubmitted} ок / ${report.complaintsSkipped} пропущено / ${report.complaintsErrors} ошибок`);
+      console.log(`[TW] Итого: Синхронизировано=${report.totalReviewsSynced} | Чаты=${report.chatsOpened} ок / ${report.chatsSkipped} пропущено / ${report.chatErrors} ошибок | Жалобы=${report.complaintsSubmitted} ок / ${report.complaintsSkipped} пропущено / ${report.complaintsErrors} ошибок | not_found=${report.notFoundSent}`);
       return report;
     }
 
@@ -1184,13 +1197,13 @@ class OptimizedHandler {
      * @param {Array} reviews - массив отзывов с данными от DataExtractor
      * @returns {Promise<Object>} - результат синхронизации
      */
-    static async syncReviewStatuses(storeId, reviews, notFoundReviewKeys = null) {
+    static async syncReviewStatuses(storeId, reviews) {
       if (!storeId) {
         console.error('[StatusSync] storeId обязателен');
         return { success: false, error: 'storeId обязателен' };
       }
 
-      if ((!reviews || reviews.length === 0) && (!notFoundReviewKeys || notFoundReviewKeys.length === 0)) {
+      if (!reviews || reviews.length === 0) {
         return { success: true, data: { received: 0, created: 0, updated: 0 } };
       }
 
@@ -1221,16 +1234,14 @@ class OptimizedHandler {
         window.addEventListener('wb-sync-response', responseHandler);
 
         // Отправляем запрос в ISOLATED world через bridge
-        const detail = {
-          requestId: requestId,
-          type: 'syncReviewStatuses',
-          storeId: storeId,
-          reviews: reviews || []
-        };
-        if (notFoundReviewKeys && notFoundReviewKeys.length > 0) {
-          detail.notFoundReviewKeys = notFoundReviewKeys;
-        }
-        window.dispatchEvent(new CustomEvent('wb-sync-request', { detail }));
+        window.dispatchEvent(new CustomEvent('wb-sync-request', {
+          detail: {
+            requestId: requestId,
+            type: 'syncReviewStatuses',
+            storeId: storeId,
+            reviews: reviews
+          }
+        }));
       });
     }
 

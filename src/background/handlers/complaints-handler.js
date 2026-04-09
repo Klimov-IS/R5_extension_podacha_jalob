@@ -52,6 +52,25 @@ export class ComplaintsHandler {
   }
 
   /**
+   * Перепарсить отзывы кабинета
+   * @param {Object} message
+   * @param {string} message.storeId - ID магазина
+   * @param {string[]} [message.nmIds] - Опциональный фильтр по артикулам
+   * @returns {Promise<Object>} { data: Object } или { error: string }
+   */
+  async reparseStore(message) {
+    const { storeId, nmIds } = message;
+
+    try {
+      const data = await pilotAPI.reparseStore(storeId, nmIds || null);
+      return { data };
+    } catch (err) {
+      console.error('[ComplaintsHandler] reparseStore error:', err);
+      return { error: err.message };
+    }
+  }
+
+  /**
    * Отметить жалобу как отправленную в WB
    * @param {Object} message - Сообщение
    * @param {string} message.storeId - ID магазина

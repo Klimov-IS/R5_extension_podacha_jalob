@@ -66,13 +66,13 @@ export class StatusSyncService {
    *   statuses: ["Жалоба отклонена", "Выкуп"]
    * }]
    */
-  async syncStatuses(storeId, reviews, notFoundReviewKeys = null) {
+  async syncStatuses(storeId, reviews) {
     if (!storeId) {
       console.error('[StatusSync] ❌ storeId обязателен');
       return { success: false, error: 'storeId обязателен' };
     }
 
-    if ((!reviews || reviews.length === 0) && (!notFoundReviewKeys || notFoundReviewKeys.length === 0)) {
+    if (!reviews || reviews.length === 0) {
       return { success: true, data: { received: 0, created: 0, updated: 0 } };
     }
 
@@ -82,11 +82,6 @@ export class StatusSyncService {
     // Разбиваем на батчи
     const batches = this._splitIntoBatches(formattedReviews, this.BATCH_SIZE);
 
-    // Если нет отзывов, но есть notFoundKeys — создаём 1 батч (пустой reviews + notFoundKeys)
-    if (batches.length === 0 && notFoundReviewKeys && notFoundReviewKeys.length > 0) {
-      batches.push([]);
-    }
-
     // Общая статистика
     const totalStats = {
       received: 0,
@@ -95,13 +90,12 @@ export class StatusSyncService {
       errors: 0
     };
 
-    // Отправляем батчи (notFoundReviewKeys только в первый батч)
+    // Отправляем батчи
     for (let i = 0; i < batches.length; i++) {
       const batch = batches[i];
-      const batchNotFound = (i === 0) ? notFoundReviewKeys : null;
 
       try {
-        const result = await this._sendBatch(storeId, batch, batchNotFound);
+        const result = await this._sendBatch(storeId, batch);
 
         if (result.success) {
           totalStats.received += result.data.received || 0;
@@ -140,7 +134,7 @@ export class StatusSyncService {
    * Отправить один батч отзывов
    * @private
    */
-  async _sendBatch(storeId, reviews, notFoundReviewKeys = null) {
+  async _sendBatch(storeId, reviews) {
     const baseURL = await this._getBaseURL();
     const token = await this._getToken();
     const url = `${baseURL}${this.endpoint}`;
@@ -150,10 +144,6 @@ export class StatusSyncService {
       parsedAt: new Date().toISOString(),
       reviews: reviews
     };
-
-    if (notFoundReviewKeys && notFoundReviewKeys.length > 0) {
-      payload.notFoundReviewKeys = notFoundReviewKeys;
-    }
 
     try {
       const response = await fetch(url, {
@@ -197,16 +187,23 @@ export class StatusSyncService {
   _formatReviewForAPI(review) {
     const statuses = review.statuses || [];
 
-    return {
+    const result = {
       reviewKey: this._normalizeReviewKey(review.key),
       productId: review.productId,
       rating: review.rating,
       reviewDate: review.reviewDate,
       statuses: statuses,
-      canSubmitComplaint: this._canSubmitComplaint(statuses),
+      canSubmitComplaint: review.reviewStatusWb === 'not_found' ? false : this._canSubmitComplaint(statuses),
       chatStatus: review.chatStatus || null,
       ratingExcluded: review.ratingExcluded || false
     };
+
+    // Pass through reviewStatusWb for not_found signal
+    if (review.reviewStatusWb) {
+      result.reviewStatusWb = review.reviewStatusWb;
+    }
+
+    return result;
   }
 
   /**
